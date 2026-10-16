@@ -77,5 +77,4 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 | Name              | specwire                                  |
 | Repo              | private on GitHub, public after Phase 1   |
 | Compute           | Mac for dev, cloud GPUs for benchmarks    |
-| Cloud provider    | TBD                                       |
-| Who writes code   | TBD                                       |
+| Cloud provider    | RunPod                                    |
