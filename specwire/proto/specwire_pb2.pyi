@@ -29,9 +29,11 @@ class VerifyRequest(_message.Message):
     def __init__(self, context: _Optional[_Iterable[int]] = ..., draft: _Optional[_Iterable[int]] = ...) -> None: ...
 
 class VerifyReply(_message.Message):
-    __slots__ = ("num_accepted", "next_token")
+    __slots__ = ("num_accepted", "next_token", "target_choices")
     NUM_ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     NEXT_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    TARGET_CHOICES_FIELD_NUMBER: _ClassVar[int]
     num_accepted: int
     next_token: int
-    def __init__(self, num_accepted: _Optional[int] = ..., next_token: _Optional[int] = ...) -> None: ...
+    target_choices: _containers.RepeatedScalarFieldContainer[int]
+    def __init__(self, num_accepted: _Optional[int] = ..., next_token: _Optional[int] = ..., target_choices: _Optional[_Iterable[int]] = ...) -> None: ...

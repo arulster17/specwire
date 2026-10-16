@@ -23,4 +23,5 @@ message VerifyRequest {
 message VerifyReply {
   int32 num_accepted = 1;
   int32 next_token = 2;        // target's token after the accepted prefix
+  repeated int32 target_choices = 3;  // target's argmax at each of the k+1 spots
 }

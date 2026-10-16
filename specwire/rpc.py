@@ -42,8 +42,8 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
         max_len = self.verifier.model.config.max_position_embeddings
         if len(request.context) + len(request.draft) > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "context + draft exceeds model max length")
-        n, nxt = self.verifier.verify(list(request.context), list(request.draft))
-        return specwire_pb2.VerifyReply(num_accepted=n, next_token=nxt)
+        n, nxt, choices = self.verifier.verify(list(request.context), list(request.draft))
+        return specwire_pb2.VerifyReply(num_accepted=n, next_token=nxt, target_choices=choices)
 
 
 # Not handled yet: no auth or TLS, so before listening on a public interface (RunPod)
@@ -88,9 +88,9 @@ class TargetClient:
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.TargetStub(self.channel)
 
-    def verify(self, context: list[int], draft: list[int]) -> tuple[int, int]:
+    def verify(self, context: list[int], draft: list[int]) -> tuple[int, int, list[int]]:
         reply = self.stub.Verify(specwire_pb2.VerifyRequest(context=context, draft=draft))
-        return reply.num_accepted, reply.next_token
+        return reply.num_accepted, reply.next_token, list(reply.target_choices)
 
 
 if __name__ == "__main__":

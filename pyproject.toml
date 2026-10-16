@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "grpcio>=1.84.0",
     "protobuf>=7.36.2",
+    "rich>=15.0.0",
     "torch>=2.14.1",
     "transformers>=5.20.1",
 ]
