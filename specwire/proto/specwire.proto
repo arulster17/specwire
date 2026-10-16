@@ -1,0 +1,26 @@
+// Regenerate from repo root: uv run python -m grpc_tools.protoc -I. --python_out=. --pyi_out=. --grpc_python_out=. specwire/proto/specwire.proto
+syntax = "proto3";
+package specwire;
+
+service Draft {
+  rpc Propose(ProposeRequest) returns (ProposeReply);
+}
+message ProposeRequest {
+  repeated int32 context = 1;  // token ids: prompt + accepted text so far
+  int32 k = 2;                 // number of tokens to draft
+}
+message ProposeReply {
+  repeated int32 tokens = 1;
+}
+
+service Target {
+  rpc Verify(VerifyRequest) returns (VerifyReply);
+}
+message VerifyRequest {
+  repeated int32 context = 1;
+  repeated int32 draft = 2;
+}
+message VerifyReply {
+  int32 num_accepted = 1;
+  int32 next_token = 2;        // target's token after the accepted prefix
+}
