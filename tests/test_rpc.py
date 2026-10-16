@@ -1,9 +1,11 @@
+import grpc
 import pytest
 from transformers import AutoTokenizer
 
 from specwire.baseline import target_only
 from specwire.draft import Drafter
 from specwire.orchestrator import generate
+from specwire.proto import specwire_pb2
 from specwire.rpc import DraftClient, TargetClient, start_draft_server, start_target_server
 from specwire.target import Verifier
 
@@ -46,3 +48,9 @@ def test_rpc_matches_target_only(tokenizer, verifier, draft_client, target_clien
     assert generate(draft_client, target_client, ids, 32, 5, eos) == target_only(
         verifier.model, ids, 32, eos
     )
+
+
+def test_propose_rejects_k_zero(draft_client):
+    with pytest.raises(grpc.RpcError) as exc:
+        draft_client.stub.Propose(specwire_pb2.ProposeRequest(context=[1, 2, 3], k=0))
+    assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
