@@ -6,8 +6,9 @@ service Draft {
   rpc Propose(ProposeRequest) returns (ProposeReply);
 }
 message ProposeRequest {
-  repeated int32 context = 1;  // token ids: prompt + accepted text so far
-  int32 k = 2;                 // number of tokens to draft
+  int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
+  repeated int32 new_tokens = 2;   // token ids to process after the kept ones
+  int32 k = 3;                     // number of tokens to draft
 }
 message ProposeReply {
   repeated int32 tokens = 1;
@@ -17,8 +18,9 @@ service Target {
   rpc Verify(VerifyRequest) returns (VerifyReply);
 }
 message VerifyRequest {
-  repeated int32 context = 1;
-  repeated int32 draft = 2;
+  int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
+  repeated int32 new_tokens = 2;   // token ids to process after the kept ones
+  repeated int32 draft = 3;
 }
 message VerifyReply {
   int32 num_accepted = 1;

@@ -10,6 +10,20 @@ from specwire.target import Verifier
 MAX_K = 32
 
 
+def check_cache_request(request, cache, ctx):
+    """Abort unless request.keep_len and request.new_tokens fit the worker's cache."""
+    if request.keep_len < 0:
+        ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "keep_len must be >= 0")
+    if not request.new_tokens:
+        ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty new_tokens")
+    cached = cache.get_seq_length()
+    if request.keep_len > cached:
+        ctx.abort(
+            grpc.StatusCode.FAILED_PRECONDITION,
+            f"keep_len {request.keep_len} exceeds cached length {cached}; worker cache was lost",
+        )
+
+
 class DraftServicer(specwire_pb2_grpc.DraftServicer):
     """Serves a Drafter over gRPC."""
 
@@ -17,14 +31,13 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
         self.drafter = drafter
 
     def Propose(self, request, ctx):
-        if not request.context:
-            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty context")
+        check_cache_request(request, self.drafter.cache, ctx)
         if not 1 <= request.k <= MAX_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"k must be in [1, {MAX_K}]")
         max_len = self.drafter.model.config.max_position_embeddings
-        if len(request.context) + request.k > max_len:
-            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "context + k exceeds model max length")
-        tokens = self.drafter.propose(list(request.context), request.k)
+        if request.keep_len + len(request.new_tokens) + request.k > max_len:
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + k exceeds model max length")
+        tokens = self.drafter.propose(request.keep_len, list(request.new_tokens), request.k)
         return specwire_pb2.ProposeReply(tokens=tokens)
 
 
@@ -35,14 +48,15 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
         self.verifier = verifier
 
     def Verify(self, request, ctx):
-        if not request.context:
-            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty context")
+        check_cache_request(request, self.verifier.cache, ctx)
         if len(request.draft) > MAX_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"draft longer than {MAX_K}")
         max_len = self.verifier.model.config.max_position_embeddings
-        if len(request.context) + len(request.draft) > max_len:
-            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "context + draft exceeds model max length")
-        n, nxt, choices = self.verifier.verify(list(request.context), list(request.draft))
+        if request.keep_len + len(request.new_tokens) + len(request.draft) > max_len:
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + draft exceeds model max length")
+        n, nxt, choices = self.verifier.verify(
+            request.keep_len, list(request.new_tokens), list(request.draft)
+        )
         return specwire_pb2.VerifyReply(num_accepted=n, next_token=nxt, target_choices=choices)
 
 
@@ -76,9 +90,9 @@ class DraftClient:
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.DraftStub(self.channel)
 
-    def propose(self, context: list[int], k: int) -> list[int]:
-        reply = self.stub.Propose(specwire_pb2.ProposeRequest(context=context, k=k))
-        return list(reply.tokens)
+    def propose(self, keep_len: int, new_tokens: list[int], k: int) -> list[int]:
+        request = specwire_pb2.ProposeRequest(keep_len=keep_len, new_tokens=new_tokens, k=k)
+        return list(self.stub.Propose(request).tokens)
 
 
 class TargetClient:
@@ -88,8 +102,11 @@ class TargetClient:
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.TargetStub(self.channel)
 
-    def verify(self, context: list[int], draft: list[int]) -> tuple[int, int, list[int]]:
-        reply = self.stub.Verify(specwire_pb2.VerifyRequest(context=context, draft=draft))
+    def verify(
+        self, keep_len: int, new_tokens: list[int], draft: list[int]
+    ) -> tuple[int, int, list[int]]:
+        request = specwire_pb2.VerifyRequest(keep_len=keep_len, new_tokens=new_tokens, draft=draft)
+        reply = self.stub.Verify(request)
         return reply.num_accepted, reply.next_token, list(reply.target_choices)
 
 

@@ -52,5 +52,12 @@ def test_rpc_matches_target_only(tokenizer, verifier, draft_client, target_clien
 
 def test_propose_rejects_k_zero(draft_client):
     with pytest.raises(grpc.RpcError) as exc:
-        draft_client.stub.Propose(specwire_pb2.ProposeRequest(context=[1, 2, 3], k=0))
+        draft_client.stub.Propose(specwire_pb2.ProposeRequest(new_tokens=[1, 2, 3], k=0))
     assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+
+
+def test_verify_rejects_lost_cache(target_client):
+    target_client.verify(0, [1, 2, 3], [4])  # target now caches 4 tokens
+    with pytest.raises(grpc.RpcError) as exc:
+        target_client.verify(5, [6], [7])
+    assert exc.value.code() == grpc.StatusCode.FAILED_PRECONDITION

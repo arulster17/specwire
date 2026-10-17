@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dspecwire/proto/specwire.proto\x12\x08specwire\",\n\x0eProposeRequest\x12\x0f\n\x07\x63ontext\x18\x01 \x03(\x05\x12\t\n\x01k\x18\x02 \x01(\x05\"\x1e\n\x0cProposeReply\x12\x0e\n\x06tokens\x18\x01 \x03(\x05\"/\n\rVerifyRequest\x12\x0f\n\x07\x63ontext\x18\x01 \x03(\x05\x12\r\n\x05\x64raft\x18\x02 \x03(\x05\"O\n\x0bVerifyReply\x12\x14\n\x0cnum_accepted\x18\x01 \x01(\x05\x12\x12\n\nnext_token\x18\x02 \x01(\x05\x12\x16\n\x0etarget_choices\x18\x03 \x03(\x05\x32\x44\n\x05\x44raft\x12;\n\x07Propose\x12\x18.specwire.ProposeRequest\x1a\x16.specwire.ProposeReply2B\n\x06Target\x12\x38\n\x06Verify\x12\x17.specwire.VerifyRequest\x1a\x15.specwire.VerifyReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dspecwire/proto/specwire.proto\x12\x08specwire\"A\n\x0eProposeRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\t\n\x01k\x18\x03 \x01(\x05\"\x1e\n\x0cProposeReply\x12\x0e\n\x06tokens\x18\x01 \x03(\x05\"D\n\rVerifyRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\r\n\x05\x64raft\x18\x03 \x03(\x05\"O\n\x0bVerifyReply\x12\x14\n\x0cnum_accepted\x18\x01 \x01(\x05\x12\x12\n\nnext_token\x18\x02 \x01(\x05\x12\x16\n\x0etarget_choices\x18\x03 \x03(\x05\x32\x44\n\x05\x44raft\x12;\n\x07Propose\x12\x18.specwire.ProposeRequest\x1a\x16.specwire.ProposeReply2B\n\x06Target\x12\x38\n\x06Verify\x12\x17.specwire.VerifyRequest\x1a\x15.specwire.VerifyReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,15 +32,15 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'specwire.proto.specwire_pb2
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_PROPOSEREQUEST']._serialized_start=43
-  _globals['_PROPOSEREQUEST']._serialized_end=87
-  _globals['_PROPOSEREPLY']._serialized_start=89
-  _globals['_PROPOSEREPLY']._serialized_end=119
-  _globals['_VERIFYREQUEST']._serialized_start=121
-  _globals['_VERIFYREQUEST']._serialized_end=168
-  _globals['_VERIFYREPLY']._serialized_start=170
-  _globals['_VERIFYREPLY']._serialized_end=249
-  _globals['_DRAFT']._serialized_start=251
-  _globals['_DRAFT']._serialized_end=319
-  _globals['_TARGET']._serialized_start=321
-  _globals['_TARGET']._serialized_end=387
+  _globals['_PROPOSEREQUEST']._serialized_end=108
+  _globals['_PROPOSEREPLY']._serialized_start=110
+  _globals['_PROPOSEREPLY']._serialized_end=140
+  _globals['_VERIFYREQUEST']._serialized_start=142
+  _globals['_VERIFYREQUEST']._serialized_end=210
+  _globals['_VERIFYREPLY']._serialized_start=212
+  _globals['_VERIFYREPLY']._serialized_end=291
+  _globals['_DRAFT']._serialized_start=293
+  _globals['_DRAFT']._serialized_end=361
+  _globals['_TARGET']._serialized_start=363
+  _globals['_TARGET']._serialized_end=429
 # @@protoc_insertion_point(module_scope)

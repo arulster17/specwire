@@ -4,9 +4,10 @@ from specwire.proto import specwire_pb2, specwire_pb2_grpc
 def test_messages_round_trip():
     assert specwire_pb2_grpc.DraftStub and specwire_pb2_grpc.TargetStub
 
-    req = specwire_pb2.ProposeRequest(context=[1, 2, 3], k=4)
+    req = specwire_pb2.ProposeRequest(keep_len=7, new_tokens=[1, 2, 3], k=4)
     req2 = specwire_pb2.ProposeRequest.FromString(req.SerializeToString())
-    assert list(req2.context) == [1, 2, 3]
+    assert req2.keep_len == 7
+    assert list(req2.new_tokens) == [1, 2, 3]
     assert req2.k == 4
 
     rep = specwire_pb2.VerifyReply(num_accepted=2, next_token=42)

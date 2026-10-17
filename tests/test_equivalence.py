@@ -36,3 +36,9 @@ def test_matches_target_only(tokenizer, drafter, verifier, prompt, k):
     assert generate(drafter, verifier, ids, 32, k, eos) == target_only(
         verifier.model, ids, 32, eos
     )
+
+
+def test_verify_rejects_keep_len_past_cache(verifier):
+    verifier.verify(0, [1, 2, 3], [4])  # cache now holds 4 tokens
+    with pytest.raises(ValueError):
+        verifier.verify(5, [6], [7])
