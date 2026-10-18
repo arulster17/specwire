@@ -30,11 +30,11 @@ decoding, and find the network delay at which it stops paying off.
 - [ ] Write a one-page summary in my own words
 
 ### Phase 1 — Core rebuild (Mac, tiny models)
-- [ ] Draft worker, target worker, orchestrator over gRPC
-- [ ] Linear (chain) drafts — no trees yet
-- [ ] Greedy verification + rejection sampling
-- [ ] KV cache with rollback on both workers
-- [ ] Test: greedy spec-decode output == target-only output, token for token
+- [x] Draft worker, target worker, orchestrator over gRPC
+- [x] Linear (chain) drafts — no trees yet
+- [x] Greedy verification + rejection sampling
+- [x] KV cache with rollback on both workers
+- [x] Test: greedy spec-decode output == target-only output, token for token
 
 ### Phase 2 — Baselines
 - [ ] Target model alone (plain autoregressive)
@@ -60,6 +60,7 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 ### Phase 5 — Write-up
 - [ ] README: problem, design diagram, 3–4 charts, honest conclusion
 - [ ] Credit to SpecSplit and its authors
+- [ ] Discuss EAGLE-style drafting and what it means for splitting
 - [ ] Short blog post or 2-page report
 
 ## Risks / unknowns
