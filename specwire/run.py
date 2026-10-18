@@ -16,6 +16,10 @@ if __name__ == "__main__":
     parser.add_argument("--tokenizer", default="Qwen/Qwen2.5-1.5B")
     parser.add_argument("--k", type=int, default=5)
     parser.add_argument("--max-new-tokens", type=int, default=64)
+    parser.add_argument("--temperature", type=float, default=0.0)
+    parser.add_argument("--draft-temperature", type=float)
+    parser.add_argument("--top-k", type=int, default=20)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--show-steps", action="store_true")
     args = parser.parse_args()
 
@@ -32,7 +36,7 @@ if __name__ == "__main__":
         console.print(
             f"round {len(accepted)}   draft {draft_s * 1000:.0f}ms   verify {verify_s * 1000:.0f}ms"
         )
-        table = Table("spot", "draft", "target")
+        table = Table("spot", "draft", "target top")
         for i, token in enumerate(draft):
             style = "green" if i < n else "red" if i == n else "dim"
             table.add_row(str(i + 1), quoted([token]), quoted([target_choices[i]]), style=style)
@@ -50,6 +54,10 @@ if __name__ == "__main__":
         args.k,
         tokenizer.eos_token_id,
         show_round if args.show_steps else None,
+        args.temperature,
+        args.draft_temperature,
+        args.top_k,
+        args.seed,
     )
     if args.show_steps:
         rounds = len(accepted)

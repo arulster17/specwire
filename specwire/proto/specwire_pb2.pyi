@@ -1,36 +1,58 @@
 from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable
-from typing import ClassVar as _ClassVar, Optional as _Optional
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class DraftDist(_message.Message):
+    __slots__ = ("ids", "probs")
+    IDS_FIELD_NUMBER: _ClassVar[int]
+    PROBS_FIELD_NUMBER: _ClassVar[int]
+    ids: _containers.RepeatedScalarFieldContainer[int]
+    probs: _containers.RepeatedScalarFieldContainer[float]
+    def __init__(self, ids: _Optional[_Iterable[int]] = ..., probs: _Optional[_Iterable[float]] = ...) -> None: ...
+
 class ProposeRequest(_message.Message):
-    __slots__ = ("keep_len", "new_tokens", "k")
+    __slots__ = ("keep_len", "new_tokens", "k", "temperature", "top_k", "seed")
     KEEP_LEN_FIELD_NUMBER: _ClassVar[int]
     NEW_TOKENS_FIELD_NUMBER: _ClassVar[int]
     K_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    TOP_K_FIELD_NUMBER: _ClassVar[int]
+    SEED_FIELD_NUMBER: _ClassVar[int]
     keep_len: int
     new_tokens: _containers.RepeatedScalarFieldContainer[int]
     k: int
-    def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., k: _Optional[int] = ...) -> None: ...
+    temperature: float
+    top_k: int
+    seed: int
+    def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., k: _Optional[int] = ..., temperature: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ...) -> None: ...
 
 class ProposeReply(_message.Message):
-    __slots__ = ("tokens",)
+    __slots__ = ("tokens", "dists")
     TOKENS_FIELD_NUMBER: _ClassVar[int]
+    DISTS_FIELD_NUMBER: _ClassVar[int]
     tokens: _containers.RepeatedScalarFieldContainer[int]
-    def __init__(self, tokens: _Optional[_Iterable[int]] = ...) -> None: ...
+    dists: _containers.RepeatedCompositeFieldContainer[DraftDist]
+    def __init__(self, tokens: _Optional[_Iterable[int]] = ..., dists: _Optional[_Iterable[_Union[DraftDist, _Mapping]]] = ...) -> None: ...
 
 class VerifyRequest(_message.Message):
-    __slots__ = ("keep_len", "new_tokens", "draft")
+    __slots__ = ("keep_len", "new_tokens", "draft", "draft_dists", "temperature", "seed")
     KEEP_LEN_FIELD_NUMBER: _ClassVar[int]
     NEW_TOKENS_FIELD_NUMBER: _ClassVar[int]
     DRAFT_FIELD_NUMBER: _ClassVar[int]
+    DRAFT_DISTS_FIELD_NUMBER: _ClassVar[int]
+    TEMPERATURE_FIELD_NUMBER: _ClassVar[int]
+    SEED_FIELD_NUMBER: _ClassVar[int]
     keep_len: int
     new_tokens: _containers.RepeatedScalarFieldContainer[int]
     draft: _containers.RepeatedScalarFieldContainer[int]
-    def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., draft: _Optional[_Iterable[int]] = ...) -> None: ...
+    draft_dists: _containers.RepeatedCompositeFieldContainer[DraftDist]
+    temperature: float
+    seed: int
+    def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., draft: _Optional[_Iterable[int]] = ..., draft_dists: _Optional[_Iterable[_Union[DraftDist, _Mapping]]] = ..., temperature: _Optional[float] = ..., seed: _Optional[int] = ...) -> None: ...
 
 class VerifyReply(_message.Message):
     __slots__ = ("num_accepted", "next_token", "target_choices")

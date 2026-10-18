@@ -2,6 +2,13 @@
 syntax = "proto3";
 package specwire;
 
+// The draft's sampling distribution at one spot: only its top-k tokens, which is
+// everything it could have sampled, so verification stays exact.
+message DraftDist {
+  repeated int32 ids = 1;
+  repeated float probs = 2;
+}
+
 service Draft {
   rpc Propose(ProposeRequest) returns (ProposeReply);
 }
@@ -9,9 +16,13 @@ message ProposeRequest {
   int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
   repeated int32 new_tokens = 2;   // token ids to process after the kept ones
   int32 k = 3;                     // number of tokens to draft
+  float temperature = 4;           // 0 drafts greedily
+  int32 top_k = 5;                 // sample from this many top tokens when temperature > 0
+  uint64 seed = 6;
 }
 message ProposeReply {
   repeated int32 tokens = 1;
+  repeated DraftDist dists = 2;    // one per drafted token
 }
 
 service Target {
@@ -21,6 +32,9 @@ message VerifyRequest {
   int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
   repeated int32 new_tokens = 2;   // token ids to process after the kept ones
   repeated int32 draft = 3;
+  repeated DraftDist draft_dists = 4;  // required when temperature > 0
+  float temperature = 5;           // 0 verifies greedily
+  uint64 seed = 6;
 }
 message VerifyReply {
   int32 num_accepted = 1;

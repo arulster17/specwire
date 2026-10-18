@@ -27,9 +27,14 @@ def verifier():
 
 
 @pytest.fixture(scope="module")
-def draft_client():
+def drafter():
+    return Drafter("Qwen/Qwen2.5-0.5B")
+
+
+@pytest.fixture(scope="module")
+def draft_client(drafter):
     # localhost, not [::], so macOS doesn't raise a firewall prompt.
-    server, port = start_draft_server(Drafter("Qwen/Qwen2.5-0.5B"), "localhost:0")
+    server, port = start_draft_server(drafter, "localhost:0")
     yield DraftClient(f"localhost:{port}")
     server.stop(0)
 
@@ -61,3 +66,28 @@ def test_verify_rejects_lost_cache(target_client):
     with pytest.raises(grpc.RpcError) as exc:
         target_client.verify(5, [6], [7])
     assert exc.value.code() == grpc.StatusCode.FAILED_PRECONDITION
+
+
+def test_rpc_sampling_matches_in_process(tokenizer, drafter, verifier, draft_client, target_client):
+    ids = tokenizer(PROMPTS[0])["input_ids"]
+    sample = dict(temperature=0.8, top_k=20, seed=3)
+    remote = generate(draft_client, target_client, ids, 24, 4, **sample)
+    local = generate(drafter, verifier, ids, 24, 4, **sample)
+    assert remote == local
+
+
+@pytest.mark.parametrize(
+    "dists",
+    [
+        [],  # missing
+        [specwire_pb2.DraftDist(ids=[5, 6], probs=[1.0])],  # ids/probs length mismatch
+        [specwire_pb2.DraftDist(ids=[5], probs=[1.0])],  # draft token 4 not in its dist
+    ],
+)
+def test_verify_rejects_bad_draft_dists(target_client, dists):
+    request = specwire_pb2.VerifyRequest(
+        new_tokens=[1, 2, 3], draft=[4], draft_dists=dists, temperature=1.0
+    )
+    with pytest.raises(grpc.RpcError) as exc:
+        target_client.stub.Verify(request)
+    assert exc.value.code() == grpc.StatusCode.INVALID_ARGUMENT

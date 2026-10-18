@@ -8,6 +8,7 @@ from specwire.proto import specwire_pb2, specwire_pb2_grpc
 from specwire.target import Verifier
 
 MAX_K = 32
+MAX_TOP_K = 1000
 
 
 def check_cache_request(request, cache, ctx):
@@ -22,6 +23,34 @@ def check_cache_request(request, cache, ctx):
             grpc.StatusCode.FAILED_PRECONDITION,
             f"keep_len {request.keep_len} exceeds cached length {cached}; worker cache was lost",
         )
+    if request.temperature < 0:
+        ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "temperature must be >= 0")
+
+
+def check_draft_dists(request, vocab_size, ctx):
+    """Abort unless every draft token is in the vocab and, when sampling, was drawn
+    from a valid sparse distribution that gives it nonzero probability."""
+    if any(not 0 <= token < vocab_size for token in request.draft):
+        ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "draft token outside the vocab")
+    if request.temperature == 0:
+        return
+    if len(request.draft_dists) != len(request.draft):
+        ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "need one draft dist per draft token")
+    for token, dist in zip(request.draft, request.draft_dists):
+        if not dist.ids or len(dist.ids) != len(dist.probs):
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "draft dist ids and probs must match")
+        if any(not 0 <= i < vocab_size for i in dist.ids) or any(q < 0 for q in dist.probs):
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "bad draft dist")
+        if dict(zip(dist.ids, dist.probs)).get(token, 0) <= 0:
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "draft token has zero draft probability")
+
+
+def to_pb_dists(dists):
+    return [specwire_pb2.DraftDist(ids=ids, probs=probs) for ids, probs in dists]
+
+
+def from_pb_dists(dists):
+    return [(list(d.ids), list(d.probs)) for d in dists]
 
 
 class DraftServicer(specwire_pb2_grpc.DraftServicer):
@@ -34,11 +63,20 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
         check_cache_request(request, self.drafter.cache, ctx)
         if not 1 <= request.k <= MAX_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"k must be in [1, {MAX_K}]")
+        if request.temperature > 0 and not 1 <= request.top_k <= MAX_TOP_K:
+            ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"top_k must be in [1, {MAX_TOP_K}]")
         max_len = self.drafter.model.config.max_position_embeddings
         if request.keep_len + len(request.new_tokens) + request.k > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + k exceeds model max length")
-        tokens = self.drafter.propose(request.keep_len, list(request.new_tokens), request.k)
-        return specwire_pb2.ProposeReply(tokens=tokens)
+        tokens, dists = self.drafter.propose(
+            request.keep_len,
+            list(request.new_tokens),
+            request.k,
+            request.temperature,
+            request.top_k,
+            request.seed,
+        )
+        return specwire_pb2.ProposeReply(tokens=tokens, dists=to_pb_dists(dists))
 
 
 class TargetServicer(specwire_pb2_grpc.TargetServicer):
@@ -54,8 +92,14 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
         max_len = self.verifier.model.config.max_position_embeddings
         if request.keep_len + len(request.new_tokens) + len(request.draft) > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + draft exceeds model max length")
+        check_draft_dists(request, self.verifier.model.config.vocab_size, ctx)
         n, nxt, choices = self.verifier.verify(
-            request.keep_len, list(request.new_tokens), list(request.draft)
+            request.keep_len,
+            list(request.new_tokens),
+            list(request.draft),
+            from_pb_dists(request.draft_dists),
+            request.temperature,
+            request.seed,
         )
         return specwire_pb2.VerifyReply(num_accepted=n, next_token=nxt, target_choices=choices)
 
@@ -90,9 +134,25 @@ class DraftClient:
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.DraftStub(self.channel)
 
-    def propose(self, keep_len: int, new_tokens: list[int], k: int) -> list[int]:
-        request = specwire_pb2.ProposeRequest(keep_len=keep_len, new_tokens=new_tokens, k=k)
-        return list(self.stub.Propose(request).tokens)
+    def propose(
+        self,
+        keep_len: int,
+        new_tokens: list[int],
+        k: int,
+        temperature: float = 0.0,
+        top_k: int = 20,
+        seed: int = 0,
+    ) -> tuple[list[int], list[tuple[list[int], list[float]]]]:
+        request = specwire_pb2.ProposeRequest(
+            keep_len=keep_len,
+            new_tokens=new_tokens,
+            k=k,
+            temperature=temperature,
+            top_k=top_k,
+            seed=seed,
+        )
+        reply = self.stub.Propose(request)
+        return list(reply.tokens), from_pb_dists(reply.dists)
 
 
 class TargetClient:
@@ -103,9 +163,22 @@ class TargetClient:
         self.stub = specwire_pb2_grpc.TargetStub(self.channel)
 
     def verify(
-        self, keep_len: int, new_tokens: list[int], draft: list[int]
+        self,
+        keep_len: int,
+        new_tokens: list[int],
+        draft: list[int],
+        draft_dists: list[tuple[list[int], list[float]]] = (),
+        temperature: float = 0.0,
+        seed: int = 0,
     ) -> tuple[int, int, list[int]]:
-        request = specwire_pb2.VerifyRequest(keep_len=keep_len, new_tokens=new_tokens, draft=draft)
+        request = specwire_pb2.VerifyRequest(
+            keep_len=keep_len,
+            new_tokens=new_tokens,
+            draft=draft,
+            draft_dists=to_pb_dists(draft_dists),
+            temperature=temperature,
+            seed=seed,
+        )
         reply = self.stub.Verify(request)
         return reply.num_accepted, reply.next_token, list(reply.target_choices)
 

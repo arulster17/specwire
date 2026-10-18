@@ -14,3 +14,11 @@ def test_messages_round_trip():
     rep2 = specwire_pb2.VerifyReply.FromString(rep.SerializeToString())
     assert rep2.num_accepted == 2
     assert rep2.next_token == 42
+
+
+def test_draft_dists_round_trip():
+    dist = specwire_pb2.DraftDist(ids=[3, 9], probs=[0.75, 0.25])
+    rep = specwire_pb2.ProposeReply(tokens=[3], dists=[dist])
+    rep2 = specwire_pb2.ProposeReply.FromString(rep.SerializeToString())
+    assert list(rep2.dists[0].ids) == [3, 9]
+    assert list(rep2.dists[0].probs) == [0.75, 0.25]

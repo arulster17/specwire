@@ -42,3 +42,10 @@ def test_verify_rejects_keep_len_past_cache(verifier):
     verifier.verify(0, [1, 2, 3], [4])  # cache now holds 4 tokens
     with pytest.raises(ValueError):
         verifier.verify(5, [6], [7])
+
+
+def test_sampling_is_reproducible_and_seed_dependent(tokenizer, drafter, verifier):
+    ids = tokenizer(PROMPTS[0])["input_ids"]
+    runs = [generate(drafter, verifier, ids, 24, 4, temperature=1.0, seed=s) for s in (0, 0, 1)]
+    assert runs[0] == runs[1]
+    assert runs[0] != runs[2]
