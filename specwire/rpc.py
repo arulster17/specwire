@@ -2,6 +2,7 @@ import argparse
 from concurrent.futures import ThreadPoolExecutor
 
 import grpc
+import torch
 
 from specwire.draft import Drafter
 from specwire.proto import specwire_pb2, specwire_pb2_grpc
@@ -189,15 +190,18 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="localhost")
     parser.add_argument("--port", type=int)
     parser.add_argument("--model")
+    parser.add_argument("--device", default="cpu")
+    parser.add_argument("--dtype", default="float32", choices=["float32", "bfloat16", "float16"])
     args = parser.parse_args()
+    dtype = getattr(torch, args.dtype)
 
     if args.role == "draft":
         port = args.port or 50051
-        drafter = Drafter(args.model or "Qwen/Qwen2.5-0.5B")
+        drafter = Drafter(args.model or "Qwen/Qwen2.5-0.5B", args.device, dtype)
         server, _ = start_draft_server(drafter, f"{args.host}:{port}")
     else:
         port = args.port or 50052
-        verifier = Verifier(args.model or "Qwen/Qwen2.5-1.5B")
+        verifier = Verifier(args.model or "Qwen/Qwen2.5-1.5B", args.device, dtype)
         server, _ = start_target_server(verifier, f"{args.host}:{port}")
     print(f"{args.role} server listening on {args.host}:{port}", flush=True)
     server.wait_for_termination()

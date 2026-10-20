@@ -1,7 +1,7 @@
 import pytest
 from transformers import AutoTokenizer
 
-from specwire.baseline import target_only
+from specwire.baseline import target_only, target_only_cached
 from specwire.draft import Drafter
 from specwire.orchestrator import generate
 from specwire.target import Verifier
@@ -49,3 +49,12 @@ def test_sampling_is_reproducible_and_seed_dependent(tokenizer, drafter, verifie
     runs = [generate(drafter, verifier, ids, 24, 4, temperature=1.0, seed=s) for s in (0, 0, 1)]
     assert runs[0] == runs[1]
     assert runs[0] != runs[2]
+
+
+@pytest.mark.parametrize("prompt", PROMPTS)
+def test_cached_baseline_matches_uncached(tokenizer, verifier, prompt):
+    ids = tokenizer(prompt)["input_ids"]
+    eos = tokenizer.eos_token_id
+    assert target_only_cached(verifier.model, ids, 32, eos) == target_only(
+        verifier.model, ids, 32, eos
+    )

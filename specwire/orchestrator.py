@@ -33,6 +33,8 @@ def generate(
     while len(output) < max_new_tokens:
         context = prompt_ids + output
         L = len(context)
+        # propose/verify return Python ints, which waits for any GPU work to finish,
+        # so these timings are complete without an explicit synchronize.
         start = time.perf_counter()
         draft, dists = drafter.propose(
             draft_cached,

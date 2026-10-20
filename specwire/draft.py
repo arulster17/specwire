@@ -7,8 +7,9 @@ from specwire.kv import reuse_cache
 class Drafter:
     """Draft model with a KV cache; greedy at temperature 0, else top-k sampling."""
 
-    def __init__(self, model_name: str):
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, dtype=torch.float32)
+    def __init__(self, model_name: str, device: str = "cpu", dtype: torch.dtype = torch.float32):
+        self.device = torch.device(device)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, dtype=dtype).to(self.device)
         self.model.eval()
         self.cache = DynamicCache()
 
@@ -30,16 +31,19 @@ class Drafter:
         with torch.inference_mode():
             for _ in range(k):
                 logits = self.model(
-                    torch.tensor([feed]), past_key_values=self.cache, use_cache=True
-                ).logits[0, -1]
+                    torch.tensor([feed], device=self.device),
+                    past_key_values=self.cache,
+                    use_cache=True,
+                ).logits[0, -1].float()
                 if temperature == 0:
                     token = int(logits.argmax())
                     dists.append(([token], [1.0]))
                 else:
                     top = (logits / temperature).topk(min(top_k, logits.shape[-1]))
-                    probs = top.values.softmax(-1)
-                    token = int(top.indices[torch.multinomial(probs, 1, generator=generator)])
-                    dists.append((top.indices.tolist(), probs.tolist()))
+                    # Sample on CPU so a seed gives the same draws on any device.
+                    probs, ids = top.values.softmax(-1).cpu(), top.indices.cpu()
+                    token = int(ids[torch.multinomial(probs, 1, generator=generator)])
+                    dists.append((ids.tolist(), probs.tolist()))
                 drafted.append(token)
                 feed = [token]
         return drafted, dists

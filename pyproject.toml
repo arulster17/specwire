@@ -22,3 +22,12 @@ build-backend = "uv_build"
 
 [tool.uv.build-backend]
 module-root = ""
+
+# CUDA torch on Windows/Linux; macOS keeps the default PyPI build.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu130", marker = "sys_platform != 'darwin'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
