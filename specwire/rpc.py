@@ -1,4 +1,5 @@
 import argparse
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 import grpc
@@ -69,6 +70,7 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
         max_len = self.drafter.model.config.max_position_embeddings
         if request.keep_len + len(request.new_tokens) + request.k > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + k exceeds model max length")
+        start = time.perf_counter()
         tokens, dists = self.drafter.propose(
             request.keep_len,
             list(request.new_tokens),
@@ -77,7 +79,9 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
             request.top_k,
             request.seed,
         )
-        return specwire_pb2.ProposeReply(tokens=tokens, dists=to_pb_dists(dists))
+        return specwire_pb2.ProposeReply(
+            tokens=tokens, dists=to_pb_dists(dists), compute_s=time.perf_counter() - start
+        )
 
 
 class TargetServicer(specwire_pb2_grpc.TargetServicer):
@@ -94,6 +98,7 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
         if request.keep_len + len(request.new_tokens) + len(request.draft) > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + draft exceeds model max length")
         check_draft_dists(request, self.verifier.model.config.vocab_size, ctx)
+        start = time.perf_counter()
         n, nxt, choices = self.verifier.verify(
             request.keep_len,
             list(request.new_tokens),
@@ -102,7 +107,12 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
             request.temperature,
             request.seed,
         )
-        return specwire_pb2.VerifyReply(num_accepted=n, next_token=nxt, target_choices=choices)
+        return specwire_pb2.VerifyReply(
+            num_accepted=n,
+            next_token=nxt,
+            target_choices=choices,
+            compute_s=time.perf_counter() - start,
+        )
 
 
 # Not handled yet: no auth or TLS, so before listening on a public interface (RunPod)
@@ -129,11 +139,15 @@ def start_target_server(verifier, address: str = "localhost:50052"):
 
 
 class DraftClient:
-    """Remote Drafter with the same propose() signature."""
+    """Remote Drafter with the same propose() signature.
+
+    last_compute_s is the server's time in the last propose, without the network.
+    """
 
     def __init__(self, address: str):
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.DraftStub(self.channel)
+        self.last_compute_s = 0.0
 
     def propose(
         self,
@@ -153,15 +167,20 @@ class DraftClient:
             seed=seed,
         )
         reply = self.stub.Propose(request)
+        self.last_compute_s = reply.compute_s
         return list(reply.tokens), from_pb_dists(reply.dists)
 
 
 class TargetClient:
-    """Remote Verifier with the same verify() signature."""
+    """Remote Verifier with the same verify() signature.
+
+    last_compute_s is the server's time in the last verify, without the network.
+    """
 
     def __init__(self, address: str):
         self.channel = grpc.insecure_channel(address)
         self.stub = specwire_pb2_grpc.TargetStub(self.channel)
+        self.last_compute_s = 0.0
 
     def verify(
         self,
@@ -181,6 +200,7 @@ class TargetClient:
             seed=seed,
         )
         reply = self.stub.Verify(request)
+        self.last_compute_s = reply.compute_s
         return reply.num_accepted, reply.next_token, list(reply.target_choices)
 
 

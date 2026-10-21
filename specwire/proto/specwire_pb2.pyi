@@ -31,12 +31,14 @@ class ProposeRequest(_message.Message):
     def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., k: _Optional[int] = ..., temperature: _Optional[float] = ..., top_k: _Optional[int] = ..., seed: _Optional[int] = ...) -> None: ...
 
 class ProposeReply(_message.Message):
-    __slots__ = ("tokens", "dists")
+    __slots__ = ("tokens", "dists", "compute_s")
     TOKENS_FIELD_NUMBER: _ClassVar[int]
     DISTS_FIELD_NUMBER: _ClassVar[int]
+    COMPUTE_S_FIELD_NUMBER: _ClassVar[int]
     tokens: _containers.RepeatedScalarFieldContainer[int]
     dists: _containers.RepeatedCompositeFieldContainer[DraftDist]
-    def __init__(self, tokens: _Optional[_Iterable[int]] = ..., dists: _Optional[_Iterable[_Union[DraftDist, _Mapping]]] = ...) -> None: ...
+    compute_s: float
+    def __init__(self, tokens: _Optional[_Iterable[int]] = ..., dists: _Optional[_Iterable[_Union[DraftDist, _Mapping]]] = ..., compute_s: _Optional[float] = ...) -> None: ...
 
 class VerifyRequest(_message.Message):
     __slots__ = ("keep_len", "new_tokens", "draft", "draft_dists", "temperature", "seed")
@@ -55,11 +57,13 @@ class VerifyRequest(_message.Message):
     def __init__(self, keep_len: _Optional[int] = ..., new_tokens: _Optional[_Iterable[int]] = ..., draft: _Optional[_Iterable[int]] = ..., draft_dists: _Optional[_Iterable[_Union[DraftDist, _Mapping]]] = ..., temperature: _Optional[float] = ..., seed: _Optional[int] = ...) -> None: ...
 
 class VerifyReply(_message.Message):
-    __slots__ = ("num_accepted", "next_token", "target_choices")
+    __slots__ = ("num_accepted", "next_token", "target_choices", "compute_s")
     NUM_ACCEPTED_FIELD_NUMBER: _ClassVar[int]
     NEXT_TOKEN_FIELD_NUMBER: _ClassVar[int]
     TARGET_CHOICES_FIELD_NUMBER: _ClassVar[int]
+    COMPUTE_S_FIELD_NUMBER: _ClassVar[int]
     num_accepted: int
     next_token: int
     target_choices: _containers.RepeatedScalarFieldContainer[int]
-    def __init__(self, num_accepted: _Optional[int] = ..., next_token: _Optional[int] = ..., target_choices: _Optional[_Iterable[int]] = ...) -> None: ...
+    compute_s: float
+    def __init__(self, num_accepted: _Optional[int] = ..., next_token: _Optional[int] = ..., target_choices: _Optional[_Iterable[int]] = ..., compute_s: _Optional[float] = ...) -> None: ...

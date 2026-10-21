@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dspecwire/proto/specwire.proto\x12\x08specwire\"\'\n\tDraftDist\x12\x0b\n\x03ids\x18\x01 \x03(\x05\x12\r\n\x05probs\x18\x02 \x03(\x02\"s\n\x0eProposeRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\t\n\x01k\x18\x03 \x01(\x05\x12\x13\n\x0btemperature\x18\x04 \x01(\x02\x12\r\n\x05top_k\x18\x05 \x01(\x05\x12\x0c\n\x04seed\x18\x06 \x01(\x04\"B\n\x0cProposeReply\x12\x0e\n\x06tokens\x18\x01 \x03(\x05\x12\"\n\x05\x64ists\x18\x02 \x03(\x0b\x32\x13.specwire.DraftDist\"\x91\x01\n\rVerifyRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\r\n\x05\x64raft\x18\x03 \x03(\x05\x12(\n\x0b\x64raft_dists\x18\x04 \x03(\x0b\x32\x13.specwire.DraftDist\x12\x13\n\x0btemperature\x18\x05 \x01(\x02\x12\x0c\n\x04seed\x18\x06 \x01(\x04\"O\n\x0bVerifyReply\x12\x14\n\x0cnum_accepted\x18\x01 \x01(\x05\x12\x12\n\nnext_token\x18\x02 \x01(\x05\x12\x16\n\x0etarget_choices\x18\x03 \x03(\x05\x32\x44\n\x05\x44raft\x12;\n\x07Propose\x12\x18.specwire.ProposeRequest\x1a\x16.specwire.ProposeReply2B\n\x06Target\x12\x38\n\x06Verify\x12\x17.specwire.VerifyRequest\x1a\x15.specwire.VerifyReplyb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dspecwire/proto/specwire.proto\x12\x08specwire\"\'\n\tDraftDist\x12\x0b\n\x03ids\x18\x01 \x03(\x05\x12\r\n\x05probs\x18\x02 \x03(\x02\"s\n\x0eProposeRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\t\n\x01k\x18\x03 \x01(\x05\x12\x13\n\x0btemperature\x18\x04 \x01(\x02\x12\r\n\x05top_k\x18\x05 \x01(\x05\x12\x0c\n\x04seed\x18\x06 \x01(\x04\"U\n\x0cProposeReply\x12\x0e\n\x06tokens\x18\x01 \x03(\x05\x12\"\n\x05\x64ists\x18\x02 \x03(\x0b\x32\x13.specwire.DraftDist\x12\x11\n\tcompute_s\x18\x03 \x01(\x01\"\x91\x01\n\rVerifyRequest\x12\x10\n\x08keep_len\x18\x01 \x01(\x05\x12\x12\n\nnew_tokens\x18\x02 \x03(\x05\x12\r\n\x05\x64raft\x18\x03 \x03(\x05\x12(\n\x0b\x64raft_dists\x18\x04 \x03(\x0b\x32\x13.specwire.DraftDist\x12\x13\n\x0btemperature\x18\x05 \x01(\x02\x12\x0c\n\x04seed\x18\x06 \x01(\x04\"b\n\x0bVerifyReply\x12\x14\n\x0cnum_accepted\x18\x01 \x01(\x05\x12\x12\n\nnext_token\x18\x02 \x01(\x05\x12\x16\n\x0etarget_choices\x18\x03 \x03(\x05\x12\x11\n\tcompute_s\x18\x04 \x01(\x01\x32\x44\n\x05\x44raft\x12;\n\x07Propose\x12\x18.specwire.ProposeRequest\x1a\x16.specwire.ProposeReply2B\n\x06Target\x12\x38\n\x06Verify\x12\x17.specwire.VerifyRequest\x1a\x15.specwire.VerifyReplyb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -36,13 +36,13 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PROPOSEREQUEST']._serialized_start=84
   _globals['_PROPOSEREQUEST']._serialized_end=199
   _globals['_PROPOSEREPLY']._serialized_start=201
-  _globals['_PROPOSEREPLY']._serialized_end=267
-  _globals['_VERIFYREQUEST']._serialized_start=270
-  _globals['_VERIFYREQUEST']._serialized_end=415
-  _globals['_VERIFYREPLY']._serialized_start=417
-  _globals['_VERIFYREPLY']._serialized_end=496
-  _globals['_DRAFT']._serialized_start=498
-  _globals['_DRAFT']._serialized_end=566
-  _globals['_TARGET']._serialized_start=568
-  _globals['_TARGET']._serialized_end=634
+  _globals['_PROPOSEREPLY']._serialized_end=286
+  _globals['_VERIFYREQUEST']._serialized_start=289
+  _globals['_VERIFYREQUEST']._serialized_end=434
+  _globals['_VERIFYREPLY']._serialized_start=436
+  _globals['_VERIFYREPLY']._serialized_end=534
+  _globals['_DRAFT']._serialized_start=536
+  _globals['_DRAFT']._serialized_end=604
+  _globals['_TARGET']._serialized_start=606
+  _globals['_TARGET']._serialized_end=672
 # @@protoc_insertion_point(module_scope)
