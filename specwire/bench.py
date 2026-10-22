@@ -20,6 +20,7 @@ tokens from --price-target (plus --price-draft for split).
 
 import argparse
 import json
+import os
 import socket
 import statistics
 import subprocess
@@ -36,7 +37,7 @@ from transformers import AutoTokenizer
 from specwire.baseline import target_only_cached, target_only_static
 from specwire.draft import Drafter
 from specwire.orchestrator import generate
-from specwire.rpc import DraftClient, TargetClient, gpu_memory
+from specwire.rpc import TOKEN_ENV, DraftClient, TargetClient, gpu_memory
 from specwire.target import Verifier
 
 PROMPTS = [
@@ -359,8 +360,10 @@ def main():
                 )
                 procs.append(proc)
             configs = [{"mode": "split", "k": k, "rtt_ms": r} for k in args.k for r in args.rtt_ms]
+            # Spawned servers inherit the same env, so a set token covers both sides.
+            token = os.environ.get(TOKEN_ENV)
             results += bench(
-                configs, DraftClient(draft_addr), TargetClient(target_addr),
+                configs, DraftClient(draft_addr, token), TargetClient(target_addr, token),
                 prompt_ids, args, console, baseline,
             )
         finally:

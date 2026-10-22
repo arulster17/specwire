@@ -121,3 +121,26 @@ def test_gpu_memory_tracks_and_resets_peak():
     assert 64 * 2**20 <= second["peak_allocated"] < first["peak_allocated"]
     assert first["peak_reserved"] >= first["peak_allocated"]
     del held
+
+
+@pytest.fixture(scope="module")
+def locked_target(verifier):
+    server, port = start_target_server(verifier, "localhost:0", token="s3cret")
+    yield f"localhost:{port}"
+    server.stop(0)
+
+
+def test_token_server_accepts_the_right_token(locked_target):
+    client = TargetClient(locked_target, token="s3cret")
+    assert client.memory() == {"peak_allocated": 0, "peak_reserved": 0}
+
+
+@pytest.mark.parametrize("token", [None, "wrong"])
+def test_token_server_refuses_missing_or_wrong_token(locked_target, token):
+    client = TargetClient(locked_target, token=token)
+    with pytest.raises(grpc.RpcError) as exc:
+        client.verify(0, [1, 2, 3], [4])
+    assert exc.value.code() == grpc.StatusCode.UNAUTHENTICATED
+    with pytest.raises(grpc.RpcError) as exc:
+        client.memory()
+    assert exc.value.code() == grpc.StatusCode.UNAUTHENTICATED

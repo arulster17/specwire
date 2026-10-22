@@ -1,4 +1,5 @@
 import argparse
+import os
 
 from rich.console import Console
 from rich.markup import escape
@@ -6,7 +7,7 @@ from rich.table import Table
 from transformers import AutoTokenizer
 
 from specwire.orchestrator import generate
-from specwire.rpc import DraftClient, TargetClient
+from specwire.rpc import TOKEN_ENV, DraftClient, TargetClient
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -47,8 +48,8 @@ if __name__ == "__main__":
         console.print(f"kept: {quoted(draft[:n] + [nxt])}  ({n} accepted + {source})")
 
     output = generate(
-        DraftClient(args.draft),
-        TargetClient(args.target),
+        DraftClient(args.draft, os.environ.get(TOKEN_ENV)),
+        TargetClient(args.target, os.environ.get(TOKEN_ENV)),
         ids,
         args.max_new_tokens,
         args.k,

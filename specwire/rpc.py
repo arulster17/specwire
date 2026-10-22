@@ -1,4 +1,6 @@
 import argparse
+import hmac
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,6 +13,9 @@ from specwire.target import Verifier
 
 MAX_K = 32
 MAX_TOP_K = 1000
+# Shared secret for servers on a public port: servers and clients read it from here.
+TOKEN_ENV = "SPECWIRE_TOKEN"
+TOKEN_HEADER = "x-specwire-token"
 
 
 def check_cache_request(request, worker, ctx):
@@ -139,23 +144,48 @@ def memory_dict(reply) -> dict[str, int]:
     return {"peak_allocated": reply.peak_allocated, "peak_reserved": reply.peak_reserved}
 
 
-# Not handled yet: no auth or TLS, so before listening on a public interface (RunPod)
-# restrict the firewall to our own machines or add a shared-token check.
-# Clients also set no per-call deadline.
-def start_draft_server(drafter, address: str = "localhost:50051"):
-    """Start a Draft server; return (server, bound_port)."""
+class TokenCheck(grpc.ServerInterceptor):
+    """Refuse calls that don't carry the shared token. RunPod's public ports are open
+    to anyone; there is no TLS, so this keeps out strangers, not an eavesdropper."""
+
+    def __init__(self, token: str):
+        self.token = token.encode()
+
+        def deny(request, ctx):
+            ctx.abort(grpc.StatusCode.UNAUTHENTICATED, "missing or wrong token")
+
+        self.deny = grpc.unary_unary_rpc_method_handler(deny)
+
+    def intercept_service(self, continuation, details):
+        sent = dict(details.invocation_metadata).get(TOKEN_HEADER, "")
+        if hmac.compare_digest(sent.encode(), self.token):
+            return continuation(details)
+        return self.deny
+
+
+def new_server(token):
     # One worker: the model handles one request at a time.
-    server = grpc.server(ThreadPoolExecutor(max_workers=1))
+    interceptors = [TokenCheck(token)] if token else []
+    return grpc.server(ThreadPoolExecutor(max_workers=1), interceptors=interceptors)
+
+
+def token_metadata(token):
+    return ((TOKEN_HEADER, token),) if token else ()
+
+
+# Clients set no per-call deadline yet.
+def start_draft_server(drafter, address: str = "localhost:50051", token: str | None = None):
+    """Start a Draft server; return (server, bound_port). With a token, calls must send it."""
+    server = new_server(token)
     specwire_pb2_grpc.add_DraftServicer_to_server(DraftServicer(drafter), server)
     port = server.add_insecure_port(address)
     server.start()
     return server, port
 
 
-def start_target_server(verifier, address: str = "localhost:50052"):
-    """Start a Target server; return (server, bound_port)."""
-    # One worker: the model handles one request at a time.
-    server = grpc.server(ThreadPoolExecutor(max_workers=1))
+def start_target_server(verifier, address: str = "localhost:50052", token: str | None = None):
+    """Start a Target server; return (server, bound_port). With a token, calls must send it."""
+    server = new_server(token)
     specwire_pb2_grpc.add_TargetServicer_to_server(TargetServicer(verifier), server)
     port = server.add_insecure_port(address)
     server.start()
@@ -168,8 +198,9 @@ class DraftClient:
     last_compute_s is the server's time in the last propose, without the network.
     """
 
-    def __init__(self, address: str):
+    def __init__(self, address: str, token: str | None = None):
         self.channel = grpc.insecure_channel(address)
+        self.metadata = token_metadata(token)
         self.stub = specwire_pb2_grpc.DraftStub(self.channel)
         self.last_compute_s = 0.0
 
@@ -190,13 +221,14 @@ class DraftClient:
             top_k=top_k,
             seed=seed,
         )
-        reply = self.stub.Propose(request)
+        reply = self.stub.Propose(request, metadata=self.metadata)
         self.last_compute_s = reply.compute_s
         return list(reply.tokens), from_pb_dists(reply.dists)
 
     def memory(self, reset: bool = False) -> dict[str, int]:
         """The server's peak GPU memory, as gpu_memory() returns it."""
-        return memory_dict(self.stub.Memory(specwire_pb2.MemoryRequest(reset=reset)))
+        request = specwire_pb2.MemoryRequest(reset=reset)
+        return memory_dict(self.stub.Memory(request, metadata=self.metadata))
 
 
 class TargetClient:
@@ -205,8 +237,9 @@ class TargetClient:
     last_compute_s is the server's time in the last verify, without the network.
     """
 
-    def __init__(self, address: str):
+    def __init__(self, address: str, token: str | None = None):
         self.channel = grpc.insecure_channel(address)
+        self.metadata = token_metadata(token)
         self.stub = specwire_pb2_grpc.TargetStub(self.channel)
         self.last_compute_s = 0.0
 
@@ -227,13 +260,14 @@ class TargetClient:
             temperature=temperature,
             seed=seed,
         )
-        reply = self.stub.Verify(request)
+        reply = self.stub.Verify(request, metadata=self.metadata)
         self.last_compute_s = reply.compute_s
         return reply.num_accepted, reply.next_token, list(reply.target_choices)
 
     def memory(self, reset: bool = False) -> dict[str, int]:
         """The server's peak GPU memory, as gpu_memory() returns it."""
-        return memory_dict(self.stub.Memory(specwire_pb2.MemoryRequest(reset=reset)))
+        request = specwire_pb2.MemoryRequest(reset=reset)
+        return memory_dict(self.stub.Memory(request, metadata=self.metadata))
 
 
 if __name__ == "__main__":
@@ -247,14 +281,17 @@ if __name__ == "__main__":
     parser.add_argument("--fast", action="store_true", help="static cache + CUDA graphs")
     args = parser.parse_args()
     dtype = getattr(torch, args.dtype)
+    token = os.environ.get(TOKEN_ENV)
+    if args.host not in ("localhost", "127.0.0.1") and not token:
+        parser.error(f"set {TOKEN_ENV} before listening on {args.host}: the port has no other auth")
 
     if args.role == "draft":
         port = args.port or 50051
         drafter = Drafter(args.model or "Qwen/Qwen2.5-0.5B", args.device, dtype, args.fast)
-        server, _ = start_draft_server(drafter, f"{args.host}:{port}")
+        server, _ = start_draft_server(drafter, f"{args.host}:{port}", token)
     else:
         port = args.port or 50052
         verifier = Verifier(args.model or "Qwen/Qwen2.5-1.5B", args.device, dtype, args.fast)
-        server, _ = start_target_server(verifier, f"{args.host}:{port}")
+        server, _ = start_target_server(verifier, f"{args.host}:{port}", token)
     print(f"{args.role} server listening on {args.host}:{port}", flush=True)
     server.wait_for_termination()
