@@ -13,13 +13,13 @@ MAX_K = 32
 MAX_TOP_K = 1000
 
 
-def check_cache_request(request, cache, ctx):
+def check_cache_request(request, worker, ctx):
     """Abort unless request.keep_len and request.new_tokens fit the worker's cache."""
     if request.keep_len < 0:
         ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "keep_len must be >= 0")
     if not request.new_tokens:
         ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "empty new_tokens")
-    cached = cache.get_seq_length()
+    cached = worker.cached_len
     if request.keep_len > cached:
         ctx.abort(
             grpc.StatusCode.FAILED_PRECONDITION,
@@ -62,12 +62,12 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
         self.drafter = drafter
 
     def Propose(self, request, ctx):
-        check_cache_request(request, self.drafter.cache, ctx)
+        check_cache_request(request, self.drafter, ctx)
         if not 1 <= request.k <= MAX_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"k must be in [1, {MAX_K}]")
         if request.temperature > 0 and not 1 <= request.top_k <= MAX_TOP_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"top_k must be in [1, {MAX_TOP_K}]")
-        max_len = self.drafter.model.config.max_position_embeddings
+        max_len = self.drafter.max_len
         if request.keep_len + len(request.new_tokens) + request.k > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + k exceeds model max length")
         start = time.perf_counter()
@@ -91,10 +91,10 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
         self.verifier = verifier
 
     def Verify(self, request, ctx):
-        check_cache_request(request, self.verifier.cache, ctx)
+        check_cache_request(request, self.verifier, ctx)
         if len(request.draft) > MAX_K:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, f"draft longer than {MAX_K}")
-        max_len = self.verifier.model.config.max_position_embeddings
+        max_len = self.verifier.max_len
         if request.keep_len + len(request.new_tokens) + len(request.draft) > max_len:
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "sequence + draft exceeds model max length")
         check_draft_dists(request, self.verifier.model.config.vocab_size, ctx)
@@ -212,16 +212,17 @@ if __name__ == "__main__":
     parser.add_argument("--model")
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--dtype", default="float32", choices=["float32", "bfloat16", "float16"])
+    parser.add_argument("--fast", action="store_true", help="static cache + CUDA graphs")
     args = parser.parse_args()
     dtype = getattr(torch, args.dtype)
 
     if args.role == "draft":
         port = args.port or 50051
-        drafter = Drafter(args.model or "Qwen/Qwen2.5-0.5B", args.device, dtype)
+        drafter = Drafter(args.model or "Qwen/Qwen2.5-0.5B", args.device, dtype, args.fast)
         server, _ = start_draft_server(drafter, f"{args.host}:{port}")
     else:
         port = args.port or 50052
-        verifier = Verifier(args.model or "Qwen/Qwen2.5-1.5B", args.device, dtype)
+        verifier = Verifier(args.model or "Qwen/Qwen2.5-1.5B", args.device, dtype, args.fast)
         server, _ = start_target_server(verifier, f"{args.host}:{port}")
     print(f"{args.role} server listening on {args.host}:{port}", flush=True)
     server.wait_for_termination()

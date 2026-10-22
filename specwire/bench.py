@@ -28,7 +28,7 @@ from rich.console import Console
 from rich.table import Table
 from transformers import AutoTokenizer
 
-from specwire.baseline import target_only_cached
+from specwire.baseline import target_only_cached, target_only_static
 from specwire.draft import Drafter
 from specwire.orchestrator import generate
 from specwire.rpc import DraftClient, TargetClient
@@ -79,7 +79,9 @@ def run_once(mode, drafter, verifier, prompt_ids, max_new_tokens, k, temperature
 
     start = time.perf_counter()
     for i, ids in enumerate(prompt_ids):
-        if mode == "target":
+        if mode == "target" and verifier.runner:
+            outputs.append(target_only_static(verifier.runner, ids, max_new_tokens))
+        elif mode == "target":
             outputs.append(target_only_cached(verifier.model, ids, max_new_tokens))
         else:
             outputs.append(
@@ -141,12 +143,13 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def spawn_server(role, model, device, dtype):
+def spawn_server(role, model, device, dtype, fast):
     """Start a worker server subprocess; return (process, address) once it is listening."""
     port = free_port()
     proc = subprocess.Popen(
         [sys.executable, "-m", "specwire.rpc", role, "--port", str(port), "--model", model]
-        + ["--device", device, "--dtype", dtype],
+        + ["--device", device, "--dtype", dtype]
+        + (["--fast"] if fast else []),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         encoding="utf-8",  # Windows would default to cp1252 and choke on progress bars
@@ -255,6 +258,8 @@ def main():
     parser.add_argument("--device", default="cuda" if cuda else "cpu")
     parser.add_argument("--dtype", default="bfloat16" if cuda else "float32",
                         choices=["float32", "bfloat16", "float16"])
+    parser.add_argument("--fast", action="store_true",
+                        help="static cache + CUDA graphs for draft, target and baseline")
     parser.add_argument("--draft", help="address of a running draft server (split mode)")
     parser.add_argument("--target", help="address of a running target server (split mode)")
     parser.add_argument("--out", help="results JSON path (default: results/bench-<time>.json)")
@@ -271,9 +276,10 @@ def main():
     results, baseline = [], {}
 
     if inproc:
-        console.print(f"loading models on {args.device} ({args.dtype})")
-        drafter = Drafter(args.draft_model, args.device, dtype)
-        verifier = Verifier(args.target_model, args.device, dtype)
+        fast = " fast" if args.fast else ""
+        console.print(f"loading models on {args.device} ({args.dtype}{fast})")
+        drafter = Drafter(args.draft_model, args.device, dtype, args.fast)
+        verifier = Verifier(args.target_model, args.device, dtype, args.fast)
         results += bench(configs, drafter, verifier, prompt_ids, args, console, baseline)
         del drafter, verifier  # free the GPU before split mode loads its own copies
         if cuda:
@@ -285,11 +291,15 @@ def main():
             draft_addr, target_addr = args.draft, args.target
             if not draft_addr:
                 console.print("starting draft server")
-                proc, draft_addr = spawn_server("draft", args.draft_model, args.device, args.dtype)
+                proc, draft_addr = spawn_server(
+                    "draft", args.draft_model, args.device, args.dtype, args.fast
+                )
                 procs.append(proc)
             if not target_addr:
                 console.print("starting target server")
-                proc, target_addr = spawn_server("target", args.target_model, args.device, args.dtype)
+                proc, target_addr = spawn_server(
+                    "target", args.target_model, args.device, args.dtype, args.fast
+                )
                 procs.append(proc)
             configs = [{"mode": "split", "k": k, "rtt_ms": r} for k in args.k for r in args.rtt_ms]
             results += bench(

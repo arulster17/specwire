@@ -38,3 +38,22 @@ def target_only_cached(
                 break
             feed = [token]
     return generated
+
+
+def target_only_static(
+    runner, prompt_ids: list[int], max_new_tokens: int, eos_token_id: int | None = None
+) -> list[int]:
+    """Greedy-decode with the target alone on a StaticRunner: the fair baseline for
+    fast mode. Tokens stay on the device, so it waits for the GPU once per sequence;
+    an EOS is cut afterwards, which gives the same output as stopping there."""
+    runner.rollback(0)
+    feed = torch.tensor(prompt_ids, device=runner.device)
+    generated = []
+    with torch.inference_mode():
+        for _ in range(max_new_tokens):
+            feed = runner(feed)[-1].argmax().view(1)
+            generated.append(feed)
+    generated = torch.cat(generated).tolist() if generated else []
+    if eos_token_id in generated:
+        generated = generated[: generated.index(eos_token_id) + 1]
+    return generated
