@@ -37,9 +37,9 @@ decoding, and find the network delay at which it stops paying off.
 - [x] Test: greedy spec-decode output == target-only output, token for token
 
 ### Phase 2 — Baselines
-- [ ] Target model alone (plain autoregressive)
-- [ ] Both models on one GPU (standard speculative decoding)
-- [ ] Split across machines (the thesis)
+- [x] Target model alone (plain autoregressive)
+- [x] Both models on one GPU (standard speculative decoding)
+- [x] Split across machines (the thesis)
 
 ### Phase 3 — Cloud benchmarks
 Setup: draft (Llama-3.2-1B) on L4, target (Llama-3.1-8B) on A100, same
