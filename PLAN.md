@@ -26,8 +26,8 @@ decoding, and find the network delay at which it stops paying off.
 ## Phases
 
 ### Phase 0 — Understand the original
-- [ ] Read `pipeline.py`, `target/engine.py`, `verification.py`, `kv_cache.py`
-- [ ] Write a one-page summary in my own words
+- [x] Read `pipeline.py`, `target/engine.py`, `verification.py`, `kv_cache.py`
+- [x] Write a one-page summary in my own words
 
 ### Phase 1 — Core rebuild (Mac, tiny models)
 - [x] Draft worker, target worker, orchestrator over gRPC
