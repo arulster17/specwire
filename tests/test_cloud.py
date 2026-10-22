@@ -9,7 +9,7 @@ from specwire import cloud
 def up_args(**overrides):
     args = dict(
         image="ubuntu:24.04", target_gpu="NVIDIA A100-SXM4-80GB", draft_gpu="NVIDIA L4",
-        cuda=["13.0"], datacenter="EUR-IS-1", draft_datacenter=None,
+        cuda=[], datacenter="EUR-IS-1", draft_datacenter=None,
         target_disk_gb=80, draft_disk_gb=40, hf_secret="hf_token",
     )
     return argparse.Namespace(**(args | overrides))
@@ -91,3 +91,9 @@ def test_bench_keeps_user_flags_and_out_name(pods):
     assert argv.count("--modes") == 1 and argv[argv.index("--modes") + 1] == "target"
     assert argv[argv.index("--out") + 1] == "results/mine.json"
     assert "--target" not in argv
+
+
+def test_cuda_filter_only_when_asked():
+    assert "allowedCudaVersions" not in cloud.pod_body("draft", up_args(), 1, "k")
+    body = cloud.pod_body("draft", up_args(cuda=["13.0"]), 1, "k")
+    assert body["allowedCudaVersions"] == ["13.0"]

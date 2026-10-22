@@ -137,7 +137,6 @@ def pod_body(role, args, ttl_epoch, pubkey):
         "interruptible": False,
         "gpuTypeIds": [args.target_gpu if target else args.draft_gpu],
         "gpuCount": 1,
-        "allowedCudaVersions": args.cuda,
         "dataCenterIds": [args.datacenter if target else args.draft_datacenter or args.datacenter],
         "containerDiskInGb": args.target_disk_gb if target else args.draft_disk_gb,
         # Explicit: the API's default is a 20 GB pod volume, billed even while stopped.
@@ -150,7 +149,7 @@ def pod_body(role, args, ttl_epoch, pubkey):
             "HF_TOKEN": "{{ RUNPOD_SECRET_" + args.hf_secret + " }}",
             "SPECWIRE_SSH_PUBKEY": pubkey,
         },
-    }
+    } | ({"allowedCudaVersions": args.cuda} if args.cuda else {})
 
 
 def create_pod(body, wait_s):
@@ -452,8 +451,10 @@ def main(argv=None):
     p.add_argument("--capacity-wait-min", type=int, default=10,
                    help="keep retrying an out-of-stock GPU this long")
     p.add_argument("--image", default="ubuntu:24.04", help="uv brings its own Python and CUDA torch")
-    p.add_argument("--cuda", nargs="+", default=["13.0"],
-                   help="host CUDA versions to accept; the locked torch is built for 13.0")
+    # Off by default: 13.0 is the newest version the API accepts, so the filter can
+    # exclude hosts on newer drivers. Setup checks torch can use the GPU instead.
+    p.add_argument("--cuda", nargs="+", default=[],
+                   help="host CUDA versions to accept (e.g. 13.0); default: any")
     p.add_argument("--hf-secret", default="hf_token", help="RunPod secret holding the HF token")
     p.add_argument("--target-disk-gb", type=int, default=80)
     p.add_argument("--draft-disk-gb", type=int, default=40)
