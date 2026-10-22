@@ -47,6 +47,20 @@ def check_draft_dists(request, vocab_size, ctx):
             ctx.abort(grpc.StatusCode.INVALID_ARGUMENT, "draft token has zero draft probability")
 
 
+def gpu_memory(device: torch.device, reset: bool = False) -> dict[str, int]:
+    """Peak GPU bytes allocated and reserved on device since the last reset; zeros off CUDA."""
+    if device.type != "cuda":
+        return {"peak_allocated": 0, "peak_reserved": 0}
+    peak = {
+        "peak_allocated": torch.cuda.max_memory_allocated(device),
+        "peak_reserved": torch.cuda.max_memory_reserved(device),
+    }
+    if reset:
+        # The new peak starts from what is held now, so it still counts the weights.
+        torch.cuda.reset_peak_memory_stats(device)
+    return peak
+
+
 def to_pb_dists(dists):
     return [specwire_pb2.DraftDist(ids=ids, probs=probs) for ids, probs in dists]
 
@@ -83,6 +97,9 @@ class DraftServicer(specwire_pb2_grpc.DraftServicer):
             tokens=tokens, dists=to_pb_dists(dists), compute_s=time.perf_counter() - start
         )
 
+    def Memory(self, request, ctx):
+        return specwire_pb2.MemoryReply(**gpu_memory(self.drafter.device, request.reset))
+
 
 class TargetServicer(specwire_pb2_grpc.TargetServicer):
     """Serves a Verifier over gRPC."""
@@ -113,6 +130,13 @@ class TargetServicer(specwire_pb2_grpc.TargetServicer):
             target_choices=choices,
             compute_s=time.perf_counter() - start,
         )
+
+    def Memory(self, request, ctx):
+        return specwire_pb2.MemoryReply(**gpu_memory(self.verifier.device, request.reset))
+
+
+def memory_dict(reply) -> dict[str, int]:
+    return {"peak_allocated": reply.peak_allocated, "peak_reserved": reply.peak_reserved}
 
 
 # Not handled yet: no auth or TLS, so before listening on a public interface (RunPod)
@@ -170,6 +194,10 @@ class DraftClient:
         self.last_compute_s = reply.compute_s
         return list(reply.tokens), from_pb_dists(reply.dists)
 
+    def memory(self, reset: bool = False) -> dict[str, int]:
+        """The server's peak GPU memory, as gpu_memory() returns it."""
+        return memory_dict(self.stub.Memory(specwire_pb2.MemoryRequest(reset=reset)))
+
 
 class TargetClient:
     """Remote Verifier with the same verify() signature.
@@ -202,6 +230,10 @@ class TargetClient:
         reply = self.stub.Verify(request)
         self.last_compute_s = reply.compute_s
         return reply.num_accepted, reply.next_token, list(reply.target_choices)
+
+    def memory(self, reset: bool = False) -> dict[str, int]:
+        """The server's peak GPU memory, as gpu_memory() returns it."""
+        return memory_dict(self.stub.Memory(specwire_pb2.MemoryRequest(reset=reset)))
 
 
 if __name__ == "__main__":

@@ -39,12 +39,23 @@ class DraftStub:
                 request_serializer=specwire_dot_proto_dot_specwire__pb2.ProposeRequest.SerializeToString,
                 response_deserializer=specwire_dot_proto_dot_specwire__pb2.ProposeReply.FromString,
                 _registered_method=True)
+        self.Memory = channel.unary_unary(
+                '/specwire.Draft/Memory',
+                request_serializer=specwire_dot_proto_dot_specwire__pb2.MemoryRequest.SerializeToString,
+                response_deserializer=specwire_dot_proto_dot_specwire__pb2.MemoryReply.FromString,
+                _registered_method=True)
 
 
 class DraftServicer:
     """Missing associated documentation comment in .proto file."""
 
     def Propose(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Memory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -57,6 +68,11 @@ def add_DraftServicer_to_server(servicer, server):
                     servicer.Propose,
                     request_deserializer=specwire_dot_proto_dot_specwire__pb2.ProposeRequest.FromString,
                     response_serializer=specwire_dot_proto_dot_specwire__pb2.ProposeReply.SerializeToString,
+            ),
+            'Memory': grpc.unary_unary_rpc_method_handler(
+                    servicer.Memory,
+                    request_deserializer=specwire_dot_proto_dot_specwire__pb2.MemoryRequest.FromString,
+                    response_serializer=specwire_dot_proto_dot_specwire__pb2.MemoryReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -96,6 +112,33 @@ class Draft:
             metadata,
             _registered_method=True)
 
+    @staticmethod
+    def Memory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/specwire.Draft/Memory',
+            specwire_dot_proto_dot_specwire__pb2.MemoryRequest.SerializeToString,
+            specwire_dot_proto_dot_specwire__pb2.MemoryReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
 
 class TargetStub:
     """Missing associated documentation comment in .proto file."""
@@ -111,12 +154,23 @@ class TargetStub:
                 request_serializer=specwire_dot_proto_dot_specwire__pb2.VerifyRequest.SerializeToString,
                 response_deserializer=specwire_dot_proto_dot_specwire__pb2.VerifyReply.FromString,
                 _registered_method=True)
+        self.Memory = channel.unary_unary(
+                '/specwire.Target/Memory',
+                request_serializer=specwire_dot_proto_dot_specwire__pb2.MemoryRequest.SerializeToString,
+                response_deserializer=specwire_dot_proto_dot_specwire__pb2.MemoryReply.FromString,
+                _registered_method=True)
 
 
 class TargetServicer:
     """Missing associated documentation comment in .proto file."""
 
     def Verify(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Memory(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -129,6 +183,11 @@ def add_TargetServicer_to_server(servicer, server):
                     servicer.Verify,
                     request_deserializer=specwire_dot_proto_dot_specwire__pb2.VerifyRequest.FromString,
                     response_serializer=specwire_dot_proto_dot_specwire__pb2.VerifyReply.SerializeToString,
+            ),
+            'Memory': grpc.unary_unary_rpc_method_handler(
+                    servicer.Memory,
+                    request_deserializer=specwire_dot_proto_dot_specwire__pb2.MemoryRequest.FromString,
+                    response_serializer=specwire_dot_proto_dot_specwire__pb2.MemoryReply.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -158,6 +217,33 @@ class Target:
             '/specwire.Target/Verify',
             specwire_dot_proto_dot_specwire__pb2.VerifyRequest.SerializeToString,
             specwire_dot_proto_dot_specwire__pb2.VerifyReply.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Memory(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/specwire.Target/Memory',
+            specwire_dot_proto_dot_specwire__pb2.MemoryRequest.SerializeToString,
+            specwire_dot_proto_dot_specwire__pb2.MemoryReply.FromString,
             options,
             channel_credentials,
             insecure,

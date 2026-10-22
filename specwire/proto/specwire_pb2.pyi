@@ -14,6 +14,20 @@ class DraftDist(_message.Message):
     probs: _containers.RepeatedScalarFieldContainer[float]
     def __init__(self, ids: _Optional[_Iterable[int]] = ..., probs: _Optional[_Iterable[float]] = ...) -> None: ...
 
+class MemoryRequest(_message.Message):
+    __slots__ = ("reset",)
+    RESET_FIELD_NUMBER: _ClassVar[int]
+    reset: bool
+    def __init__(self, reset: _Optional[bool] = ...) -> None: ...
+
+class MemoryReply(_message.Message):
+    __slots__ = ("peak_allocated", "peak_reserved")
+    PEAK_ALLOCATED_FIELD_NUMBER: _ClassVar[int]
+    PEAK_RESERVED_FIELD_NUMBER: _ClassVar[int]
+    peak_allocated: int
+    peak_reserved: int
+    def __init__(self, peak_allocated: _Optional[int] = ..., peak_reserved: _Optional[int] = ...) -> None: ...
+
 class ProposeRequest(_message.Message):
     __slots__ = ("keep_len", "new_tokens", "k", "temperature", "top_k", "seed")
     KEEP_LEN_FIELD_NUMBER: _ClassVar[int]

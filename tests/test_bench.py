@@ -1,8 +1,9 @@
 import time
 
 import pytest
+import torch
 
-from specwire.bench import Delayed, summarize
+from specwire.bench import Delayed, summarize, usd_per_million, worker_memory
 
 
 def fake_run(tokens, seconds, accepted, draft_s=0.02, compute_s=0.01, outputs=()):
@@ -48,3 +49,22 @@ def test_delayed_sleeps_and_forwards():
     assert delayed.propose(1, 2) == (1, 2)
     assert time.perf_counter() - start >= 0.05
     assert delayed.last_compute_s == 0.25
+
+
+def test_usd_per_million():
+    # $3.60/hour at 100 tok/s is 360,000 tokens per $3.60, so $10 per 1M tokens.
+    assert usd_per_million(100.0, 3.6) == pytest.approx(10.0)
+
+
+def test_worker_memory_prefers_rpc_and_falls_back_to_device():
+    class Remote:
+        def memory(self, reset=False):
+            return {"peak_allocated": 7, "peak_reserved": 9, "reset": reset}
+
+    class Local:
+        device = torch.device("cpu")
+
+    assert worker_memory(Remote(), reset=True)["reset"] is True
+    assert worker_memory(Delayed(Remote(), rtt_ms=0))["peak_allocated"] == 7
+    assert worker_memory(Local()) == {"peak_allocated": 0, "peak_reserved": 0}
+    assert worker_memory(Delayed(Local(), rtt_ms=0)) == {"peak_allocated": 0, "peak_reserved": 0}

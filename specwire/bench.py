@@ -11,6 +11,11 @@ acc/rnd = draft tokens accepted per round; tok/call = tokens per target call;
 draft ms/tok and verify ms are model compute per round; net ms = call time minus
 compute (gRPC + injected delay); cost = draft ms per token / target-only ms per token;
 match = prompts whose greedy output equals target-only.
+
+Second table: tgt GB / draft GB = peak GPU memory allocated on the target's and
+the draft's GPU (co-located counts both models on one GPU; target-only isn't
+measured because the idle draft is loaded too); $/1M tok = dollars per million
+tokens from --price-target (plus --price-draft for split).
 """
 
 import argparse
@@ -31,7 +36,7 @@ from transformers import AutoTokenizer
 from specwire.baseline import target_only_cached, target_only_static
 from specwire.draft import Drafter
 from specwire.orchestrator import generate
-from specwire.rpc import DraftClient, TargetClient
+from specwire.rpc import DraftClient, TargetClient, gpu_memory
 from specwire.target import Verifier
 
 PROMPTS = [
@@ -137,6 +142,17 @@ def summarize(config, runs, target_ms_per_token=None, target_outputs=None):
     return summary
 
 
+def worker_memory(worker, reset=False):
+    """Peak GPU bytes of a worker: asked over RPC for a remote one, read directly in-process."""
+    if hasattr(worker, "memory"):
+        return worker.memory(reset)
+    return gpu_memory(worker.device, reset)
+
+
+def usd_per_million(tok_s, usd_per_hour):
+    return usd_per_hour / (tok_s * 3600) * 1e6
+
+
 def free_port() -> int:
     with socket.socket() as s:
         s.bind(("localhost", 0))
@@ -181,9 +197,17 @@ def bench(configs, drafter, verifier, prompt_ids, args, console, baseline):
             args.top_k,
             seed,
         )
+        split = config["mode"] == "split"
+        # In-process, both models share one GPU and one peak; split reads each server.
+        worker_memory(verifier, reset=True)
+        if split:
+            worker_memory(drafter, reset=True)
         for w in range(args.warmup):
             run(args.seed - 1 - w)
         runs = [run(args.seed + 1000 * i) for i in range(args.runs)]
+        memory = {"target": worker_memory(verifier)}
+        if split:
+            memory["draft"] = worker_memory(drafter)
         # Greedy output should match target-only; sampled output can't be compared.
         compare = args.temperature == 0 and config["mode"] != "target"
         summary = summarize(
@@ -200,6 +224,14 @@ def bench(configs, drafter, verifier, prompt_ids, args, console, baseline):
             }
         if baseline.get("tok_s"):
             summary["speedup"] = summary["tok_s_median"] / baseline["tok_s"]
+        # Target-only runs with the idle draft loaded too, so its peak would overstate
+        # a real target-only GPU; split's target server is the honest number for that.
+        if config["mode"] != "target":
+            summary["gpu_memory"] = memory
+        if args.price_target is not None:
+            usd_per_hour = args.price_target + (args.price_draft if split else 0)
+            summary["usd_per_hour"] = usd_per_hour
+            summary["usd_per_1m_tokens"] = usd_per_million(summary["tok_s_median"], usd_per_hour)
         console.print(f"done: {label(config)}  {summary['tok_s_median']:.1f} tok/s")
         results.append({"config": config, "summary": summary, "runs": runs})
     return results
@@ -238,6 +270,25 @@ def print_table(results, console):
         )
     console.print(table)
 
+    # Memory and cost go in their own table so the main one doesn't get wider.
+    console.print()
+    table = Table(box=None)
+    table.add_column("config", no_wrap=True)
+    for col in ("tgt GB", "draft GB", "$/hour", "$/1M tok"):
+        table.add_column(col, justify="right")
+    gb = lambda s, worker: s.get("gpu_memory", {}).get(worker, {}).get("peak_allocated")  # noqa: E731
+    for r in results:
+        s = r["summary"]
+        tgt, draft = gb(s, "target"), gb(s, "draft")
+        table.add_row(
+            label(r["config"]),
+            fmt(tgt / 1e9 if tgt is not None else None),
+            fmt(draft / 1e9 if draft is not None else None),
+            fmt(s.get("usd_per_hour")),
+            fmt(s.get("usd_per_1m_tokens")),
+        )
+    console.print(table)
+
 
 def main():
     cuda = torch.cuda.is_available()
@@ -262,8 +313,14 @@ def main():
                         help="static cache + CUDA graphs for draft, target and baseline")
     parser.add_argument("--draft", help="address of a running draft server (split mode)")
     parser.add_argument("--target", help="address of a running target server (split mode)")
+    parser.add_argument("--price-target", type=float,
+                        help="target GPU price in $/hour, to report $ per 1M tokens")
+    parser.add_argument("--price-draft", type=float,
+                        help="draft GPU price in $/hour, added for split mode")
     parser.add_argument("--out", help="results JSON path (default: results/bench-<time>.json)")
     args = parser.parse_args()
+    if args.price_target is not None and "split" in args.modes and args.price_draft is None:
+        parser.error("--price-target with split mode needs --price-draft too")
 
     console = Console(highlight=False)
     tokenizer = AutoTokenizer.from_pretrained(args.target_model)

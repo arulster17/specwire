@@ -9,8 +9,18 @@ message DraftDist {
   repeated float probs = 2;
 }
 
+// Peak GPU memory of a worker, so the bench can measure split mode's target GPU.
+message MemoryRequest {
+  bool reset = 1;                  // start a new peak after replying
+}
+message MemoryReply {
+  int64 peak_allocated = 1;        // bytes held by tensors at the peak; 0 on CPU
+  int64 peak_reserved = 2;         // bytes the allocator held from the GPU at the peak
+}
+
 service Draft {
   rpc Propose(ProposeRequest) returns (ProposeReply);
+  rpc Memory(MemoryRequest) returns (MemoryReply);
 }
 message ProposeRequest {
   int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
@@ -28,6 +38,7 @@ message ProposeReply {
 
 service Target {
   rpc Verify(VerifyRequest) returns (VerifyReply);
+  rpc Memory(MemoryRequest) returns (MemoryReply);
 }
 message VerifyRequest {
   int32 keep_len = 1;              // cached tokens to keep; 0 starts fresh
