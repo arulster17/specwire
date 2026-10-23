@@ -45,11 +45,12 @@ decoding, and find the network delay at which it stops paying off.
 Setup: draft (Llama-3.2-1B) on L4, target (Llama-3.1-8B) on A100, same
 region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 
-- [ ] Tokens/sec and time-per-token: split vs co-located vs target-only
-- [ ] Speedup vs draft length (1, 3, 5, 8)
+- [x] Tokens/sec and time-per-token: split vs co-located vs target-only
+- [x] Speedup vs draft length (1, 3, 5, 8)
 - [ ] Speedup vs network delay: same zone, +1/5/10/20 ms injected, cross-region
-- [ ] Cost per 1M tokens from real hourly prices
-- [ ] Target-GPU memory freed by moving the draft off it
+  (same zone + injected done; cross-region still to run)
+- [x] Cost per 1M tokens from real hourly prices
+- [x] Target-GPU memory freed by moving the draft off it
 
 ### Phase 4 — Improvements (pick 1–2)
 - [ ] Tree drafting
