@@ -194,3 +194,7 @@ Redraw the charts from `results/` with `uv run python scripts/plots.py`.
   match exactly, which is what the tests check.
 - **Pinned to transformers 5.20.1**, because fast mode relies on `StaticCache`
   internals.
+
+## License
+
+MIT, like SpecSplit. See [LICENSE](LICENSE).
