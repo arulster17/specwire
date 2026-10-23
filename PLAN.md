@@ -47,8 +47,7 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 
 - [x] Tokens/sec and time-per-token: split vs co-located vs target-only
 - [x] Speedup vs draft length (1, 3, 5, 8)
-- [ ] Speedup vs network delay: same zone, +1/5/10/20 ms injected, cross-region
-  (same zone + injected done; cross-region still to run)
+- [x] Speedup vs network delay: same zone, +1/5/10/20 ms injected, cross-region
 - [x] Cost per 1M tokens from real hourly prices
 - [x] Target-GPU memory freed by moving the draft off it
 
