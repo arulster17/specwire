@@ -34,8 +34,8 @@ running both models on the same GPU and costs more per token.
 - **Draft speed decides split mode.** The L4 drafts 2.7× slower than the 4090 (12.3 vs
   4.6 ms per token), and the A100 sits idle waiting for it.
 - **Memory freed is small at this size:** moving a 1B draft off the A100 frees 2.6 GB
-  of 80. That only matters if it lets the target serve more requests at once, which
-  these single-request benchmarks don't test.
+  of 80. That only matters if it lets the target serve more requests at once (see
+  [Next](#next-many-users-at-once)).
 - **Exactness:** greedy output matches the target alone token for token (tested in
   fp32 in eager mode, fast mode and over gRPC); sampled output is distributed exactly
   as the target's (rejection sampling, with a statistical test).
@@ -115,8 +115,33 @@ calls (propose, then verify), so 3 ms per call adds about 6 ms per round.
 
 Longer drafts help a little at high latency (the best k moves from 3 to 5–8, since
 each round trip then buys more tokens), but acceptance caps how far that goes.
-RunPod's datacenter names don't tell you distance: EUR-IS-2 measured 68 ms from
-EUR-IS-1.
+RunPod's datacenter names don't tell you distance: EUR-IS-2 cost 68 ms of network
+per round from EUR-IS-1.
+
+## Next: many users at once
+
+Everything above serves one request at a time. With many users batched together, the
+target GPU becomes the bottleneck, and that is where moving the draft off it could pay
+off. Before building batched decoding, I timed graph-replayed decode steps at batch
+sizes 1–128 on the A100 and the 4090 ([`scripts/batchbench.py`](scripts/batchbench.py))
+and combined them with the acceptance and network numbers above. **This is a
+prediction, not a measurement:**
+
+| Users at once | Co-located | Split | Split, two alternating groups |
+|---|---|---|---|
+| 1 | 1.35× | 1.22× | – |
+| 16 | 1.36× | 1.30× | 1.32× |
+| 32 | 1.36× | 1.28× | **1.50×** |
+| 64 | 1.23× | 1.19× | **1.43×** |
+| 128 | 1.14× | 1.13× | **1.42×** |
+
+Co-located's gain fades as users grow, because drafting takes time away from
+verifying on the A100. Split with two groups keeps the A100 busy: it verifies one half
+of the users while the 4090 drafts for the other. Even so, co-located stays cheaper
+per token at every batch size, since the second GPU adds 50% to the hourly cost. The
+model assumes every user accepts the same number of tokens each round. For a single
+user it predicted co-located about 8% higher than measured, so treat these as upper
+bounds. Batched decoding is being built next to measure it for real.
 
 ## Compared with SpecSplit
 
@@ -180,13 +205,14 @@ Redraw the charts from `results/` with `uv run python scripts/plots.py`.
 | [`specwire/rpc.py`](specwire/rpc.py), [`proto/`](specwire/proto/specwire.proto) | gRPC servers and clients, with a shared-token check |
 | [`specwire/bench.py`](specwire/bench.py) | the benchmark harness |
 | [`specwire/cloud.py`](specwire/cloud.py) | RunPod launcher: pods, SSH, teardown |
-| [`results/`](results) | every benchmark run as JSON (`archive/` holds superseded ones) |
+| [`scripts/`](scripts) | chart drawing and the batch-size microbenchmark |
+| [`results/`](results) | every benchmark run as JSON, indexed in its [README](results/README.md) |
 | [`docs/PLAN.md`](docs/PLAN.md) | the project plan and what's done |
 
 ## Limitations
 
-- **One request at a time.** Batching many requests is the case where moving the draft
-  off the target could pay off, and it isn't tested yet.
+- **One request at a time.** The batched numbers above are predicted from step
+  timings, not measured end to end yet.
 - **Small benchmark set:** 4 prompts, 128 tokens each, greedy. Acceptance rates depend
   on the text.
 - **bf16 near-ties.** In bf16, speculative and target-only output occasionally pick

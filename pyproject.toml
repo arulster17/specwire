@@ -1,6 +1,7 @@
 [project]
 name = "specwire"
 version = "0.1.0"
+description = "Speculative decoding with the draft and target models on separate machines, over gRPC"
 requires-python = ">=3.12"
 dependencies = [
     "grpcio>=1.84.0",
