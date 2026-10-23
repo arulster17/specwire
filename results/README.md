@@ -29,7 +29,8 @@ greedy, 4 prompts × 128 tokens, 3 timed runs after 1 warmup, unless noted.
 | `p3-split-4090-US-IL-1.json` | RTX 4090 in US-IL-1 | split across the Atlantic (143 ms network per round) |
 
 In `p3-split-4090-EUR-IS-2.json`, the 4090 itself ran slowly during k=1 and k=3
-(29–62 ms per draft token instead of about 4.6), so only k=5 and k=8 reflect the network.
+(29–62 ms per draft token instead of about 4.6) and partly during k=5 (10.5 ms), so
+k=8 is the clean measurement of that distance.
 
 ## Batch-size microbenchmark (A100 and RTX 4090)
 
