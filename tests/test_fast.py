@@ -14,6 +14,8 @@ from specwire.orchestrator import generate
 from specwire.rpc import DraftClient, TargetClient, start_draft_server, start_target_server
 from specwire.target import Verifier
 
+from models import DRAFT, TARGET
+
 PROMPTS = [
     "Once upon a time, in a small village by the sea,",
     "The capital of France is",
@@ -29,13 +31,13 @@ DEVICES = [
 
 @pytest.fixture(scope="module")
 def tokenizer():
-    return AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B")
+    return AutoTokenizer.from_pretrained(TARGET)
 
 
 @pytest.fixture(scope="module", params=DEVICES)
 def workers(request):
-    drafter = Drafter("Qwen/Qwen2.5-0.5B", request.param, fast=True)
-    verifier = Verifier("Qwen/Qwen2.5-1.5B", request.param, fast=True)
+    drafter = Drafter(DRAFT, request.param, fast=True)
+    verifier = Verifier(TARGET, request.param, fast=True)
     yield drafter, verifier
     del drafter, verifier
     if request.param == "cuda":
@@ -103,7 +105,7 @@ def test_rollback_past_cache_raises(workers):
 
 
 def test_runner_rejects_overflow():
-    model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B")
+    model = AutoModelForCausalLM.from_pretrained(DRAFT)
     runner = StaticRunner(model, max_len=8)
     with torch.inference_mode():
         runner(torch.arange(6))
@@ -113,7 +115,7 @@ def test_runner_rejects_overflow():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs CUDA")
 def test_graph_logits_match_eager_after_rollback():
-    model = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-0.5B").cuda().eval()
+    model = AutoModelForCausalLM.from_pretrained(DRAFT).cuda().eval()
     graphed, eager = StaticRunner(model), StaticRunner(model, graph_max_len=0)
     prompt = torch.arange(100, 120, device="cuda")
     with torch.inference_mode():

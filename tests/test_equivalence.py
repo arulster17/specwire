@@ -6,6 +6,8 @@ from specwire.draft import Drafter
 from specwire.orchestrator import generate
 from specwire.target import Verifier
 
+from models import DRAFT, TARGET
+
 PROMPTS = [
     "Once upon a time, in a small village by the sea,",
     "The capital of France is",
@@ -15,17 +17,17 @@ PROMPTS = [
 
 @pytest.fixture(scope="module")
 def tokenizer():
-    return AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B")
+    return AutoTokenizer.from_pretrained(TARGET)
 
 
 @pytest.fixture(scope="module")
 def drafter():
-    return Drafter("Qwen/Qwen2.5-0.5B")
+    return Drafter(DRAFT)
 
 
 @pytest.fixture(scope="module")
 def verifier():
-    return Verifier("Qwen/Qwen2.5-1.5B")
+    return Verifier(TARGET)
 
 
 @pytest.mark.parametrize("k", [1, 3, 5])
