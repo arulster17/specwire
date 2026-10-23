@@ -58,8 +58,8 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 - [ ] Multi-user batching (where freed target memory should pay off)
 
 ### Phase 5 — Write-up
-- [ ] README: problem, design diagram, 3–4 charts, honest conclusion
-- [ ] Credit to SpecSplit and its authors
+- [x] README: problem, design diagram, 3–4 charts, honest conclusion
+- [x] Credit to SpecSplit and its authors
 - [ ] Discuss EAGLE-style drafting and what it means for splitting
 - [ ] Short blog post or 2-page report
 
