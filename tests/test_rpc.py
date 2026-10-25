@@ -64,6 +64,14 @@ def test_rpc_matches_target_only(tokenizer, verifier, draft_client, target_clien
     )
 
 
+@pytest.mark.parametrize("k", [1, 3])
+def test_rpc_overlap_matches_target_only(tokenizer, verifier, draft_client, target_client, k):
+    ids = tokenizer(PROMPTS[0])["input_ids"]
+    eos = tokenizer.eos_token_id
+    out = generate(draft_client, target_client, ids, 32, k, eos, overlap=True)
+    assert out == target_only(verifier.model, ids, 32, eos)
+
+
 def test_propose_rejects_k_zero(draft_client):
     with pytest.raises(grpc.RpcError) as exc:
         draft_client.stub.Propose(specwire_pb2.ProposeRequest(new_tokens=[1, 2, 3], k=0))

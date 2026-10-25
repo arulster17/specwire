@@ -12,6 +12,10 @@ draft ms/tok and verify ms are model compute per round; net ms = call time minus
 compute (gRPC + injected delay); cost = draft ms per token / target-only ms per token;
 match = prompts whose greedy output equals target-only.
 
+--overlap adds split configs that draft the next round during verify (see
+orchestrator.generate); for those, ahead = rounds whose draft came from that, and
+draft ms/tok and net ms aren't shown, since draft and verify calls overlap.
+
 Second table: tgt GB / draft GB = peak GPU memory allocated on the target's and
 the draft's GPU (co-located counts both models on one GPU; target-only isn't
 measured because the idle draft is loaded too); $/1M tok = dollars per million
@@ -67,14 +71,17 @@ class Delayed:
         return getattr(self.worker, name)
 
 
-def run_once(mode, drafter, verifier, prompt_ids, max_new_tokens, k, temperature, top_k, seed):
+def run_once(
+    mode, drafter, verifier, prompt_ids, max_new_tokens, k, temperature, top_k, seed, overlap=False
+):
     """Decode every prompt once; return the run's tokens, time, outputs and per-round stats."""
     outputs, rounds = [], []
 
-    def on_round(draft, n, nxt, choices, draft_s, verify_s):
+    def on_round(draft, n, nxt, choices, draft_s, verify_s, reused):
         rounds.append(
             {
                 "accepted": n,
+                "reused": reused,
                 "draft_s": draft_s,
                 "verify_s": verify_s,
                 # Remote clients report server-side time; in-process, call time is compute time.
@@ -101,6 +108,7 @@ def run_once(mode, drafter, verifier, prompt_ids, max_new_tokens, k, temperature
                     temperature=temperature,
                     top_k=top_k,
                     seed=seed + i,
+                    overlap=overlap,
                 )
             )
     seconds = time.perf_counter() - start
@@ -128,6 +136,7 @@ def summarize(config, runs, target_ms_per_token=None, target_outputs=None):
         summary |= {
             "accepted_per_round": mean("accepted"),
             "tokens_per_target_call": sum(r["tokens"] for r in runs) / len(rounds),
+            "ahead_rate": statistics.fmean(rd.get("reused", False) for rd in rounds),
             "draft_ms_per_token": 1000 * mean("draft_compute_s") / k,
             "verify_ms_per_round": 1000 * mean("verify_compute_s"),
             "network_ms_per_round": 1000
@@ -197,6 +206,7 @@ def bench(configs, drafter, verifier, prompt_ids, args, console, baseline):
             args.temperature,
             args.top_k,
             seed,
+            config.get("overlap", False),
         )
         split = config["mode"] == "split"
         # In-process, both models share one GPU and one peak; split reads each server.
@@ -242,20 +252,22 @@ def label(config):
     if config["mode"] == "target":
         return "target-only"
     rtt = f" +{config['rtt_ms']:g}ms" if config["rtt_ms"] else ""
-    return f"{config['mode']} k={config['k']}{rtt}"
+    overlap = " overlap" if config.get("overlap") else ""
+    return f"{config['mode']}{overlap} k={config['k']}{rtt}"
 
 
 def print_table(results, console):
     # Short headers so the table fits 80 columns; see the module docstring for meanings.
     table = Table(box=None)
     table.add_column("config", no_wrap=True)
-    for col in ("tok/s", "range", "speedup", "acc/rnd", "tok/call"):
+    for col in ("tok/s", "range", "speedup", "acc/rnd", "tok/call", "ahead"):
         table.add_column(col)
     for col in ("draft ms/tok", "verify ms", "net ms", "cost", "match"):
         table.add_column(col, justify="right")
     fmt = lambda v, spec=".2f": "-" if v is None else format(v, spec)  # noqa: E731
     for r in results:
         s = r["summary"]
+        overlap = r["config"].get("overlap")
         table.add_row(
             label(r["config"]),
             f"{s['tok_s_median']:.1f}",
@@ -263,9 +275,10 @@ def print_table(results, console):
             fmt(s.get("speedup")) + ("x" if s.get("speedup") else ""),
             fmt(s.get("accepted_per_round")),
             fmt(s.get("tokens_per_target_call")),
-            fmt(s.get("draft_ms_per_token"), ".1f"),
+            fmt(s.get("ahead_rate") if overlap else None),
+            fmt(None if overlap else s.get("draft_ms_per_token"), ".1f"),
             fmt(s.get("verify_ms_per_round"), ".1f"),
-            fmt(s.get("network_ms_per_round") if r["config"]["mode"] == "split" else None, ".1f"),
+            fmt(s.get("network_ms_per_round") if r["config"]["mode"] == "split" and not overlap else None, ".1f"),
             fmt(s.get("draft_target_cost_ratio")),
             f"{s['matches_target_only']}/{s['prompts']}" if "matches_target_only" in s else "-",
         )
@@ -299,6 +312,8 @@ def main():
     parser.add_argument("--k", nargs="+", type=int, default=[5])
     parser.add_argument("--rtt-ms", nargs="+", type=float, default=[0.0],
                         help="extra delay per RPC call, split mode only")
+    parser.add_argument("--overlap", default="off", choices=["off", "on", "both"],
+                        help="split mode: draft the next round during verify")
     parser.add_argument("--runs", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--max-new-tokens", type=int, default=128)
@@ -359,7 +374,13 @@ def main():
                     "target", args.target_model, args.device, args.dtype, args.fast
                 )
                 procs.append(proc)
-            configs = [{"mode": "split", "k": k, "rtt_ms": r} for k in args.k for r in args.rtt_ms]
+            overlaps = {"off": [False], "on": [True], "both": [False, True]}[args.overlap]
+            configs = [
+                {"mode": "split", "k": k, "rtt_ms": r, "overlap": o}
+                for k in args.k
+                for r in args.rtt_ms
+                for o in overlaps
+            ]
             # Spawned servers inherit the same env, so a set token covers both sides.
             token = os.environ.get(TOKEN_ENV)
             results += bench(

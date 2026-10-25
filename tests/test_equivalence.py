@@ -40,6 +40,39 @@ def test_matches_target_only(tokenizer, drafter, verifier, prompt, k):
     )
 
 
+@pytest.mark.parametrize("k", [1, 3, 5])
+@pytest.mark.parametrize("prompt", PROMPTS)
+def test_overlap_matches_target_only(tokenizer, drafter, verifier, prompt, k):
+    ids = tokenizer(prompt)["input_ids"]
+    eos = tokenizer.eos_token_id
+    assert generate(drafter, verifier, ids, 32, k, eos, overlap=True) == target_only(
+        verifier.model, ids, 32, eos
+    )
+
+
+def test_overlap_uses_drafts_ahead_when_the_bet_wins(tokenizer, drafter):
+    # With the draft model as the target, every draft is accepted and the target's next
+    # token is the draft's own guess, so every round after the first is drafted ahead.
+    own = Verifier(DRAFT)
+    ids = tokenizer(PROMPTS[0])["input_ids"]
+    reused = []
+    out = generate(
+        drafter, own, ids, 32, 3, overlap=True, on_round=lambda *a: reused.append(a[-1])
+    )
+    assert out == target_only(own.model, ids, 32)
+    assert reused[0] is False and all(reused[1:]) and len(reused) > 2
+
+
+def test_overlap_sampling_is_reproducible(tokenizer, drafter, verifier):
+    ids = tokenizer(PROMPTS[0])["input_ids"]
+    runs = [
+        generate(drafter, verifier, ids, 24, 4, temperature=1.0, seed=s, overlap=True)
+        for s in (0, 0, 1)
+    ]
+    assert runs[0] == runs[1]
+    assert runs[0] != runs[2]
+
+
 def test_verify_rejects_keep_len_past_cache(verifier):
     verifier.verify(0, [1, 2, 3], [4])  # cache now holds 4 tokens
     with pytest.raises(ValueError):

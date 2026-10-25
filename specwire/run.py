@@ -21,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--draft-temperature", type=float)
     parser.add_argument("--top-k", type=int, default=20)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--overlap", action="store_true", help="draft the next round during verify")
     parser.add_argument("--show-steps", action="store_true")
     args = parser.parse_args()
 
@@ -32,10 +33,12 @@ if __name__ == "__main__":
     def quoted(tokens):
         return escape('"' + tokenizer.decode(tokens).replace("\n", "\\n") + '"')
 
-    def show_round(draft, n, nxt, target_choices, draft_s, verify_s):
+    def show_round(draft, n, nxt, target_choices, draft_s, verify_s, reused):
         accepted.append(n)
+        ahead = "   (drafted ahead)" if reused else ""
         console.print(
             f"round {len(accepted)}   draft {draft_s * 1000:.0f}ms   verify {verify_s * 1000:.0f}ms"
+            + ahead
         )
         table = Table("spot", "draft", "target top")
         for i, token in enumerate(draft):
@@ -59,6 +62,7 @@ if __name__ == "__main__":
         args.draft_temperature,
         args.top_k,
         args.seed,
+        args.overlap,
     )
     if args.show_steps:
         rounds = len(accepted)
