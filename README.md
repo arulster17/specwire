@@ -16,32 +16,40 @@ machines**, talking over gRPC, and a benchmark of when that actually pays off.
 ## The short answer
 
 Splitting the draft off the target's GPU **works, but only inside one datacenter and
-only with a fast draft GPU**. Even then, with one request at a time, it ties
-running both models on the same GPU and costs more per token.
+only with a fast draft GPU**. On its own, split ties running both models on the same
+GPU. With **overlap**, where the draft works on the next round while the target
+checks this one, split becomes the fastest setup: **1.43×** against co-located's
+1.32×. It still costs more per token, because you pay for a second GPU.
 
 | Llama 3.2 1B → Llama 3.1 8B, A100 target | tok/s | vs target alone | $ / 1M tokens |
 |---|---|---|---|
-| Target alone | 61.4 | 1.00× | $8.09 |
-| Draft co-located on the A100 (k=3) | 76.8 | **1.25×** | **$6.48** |
-| Split: RTX 4090 draft, same datacenter (k=3) | 73.6 | **1.20×** | $10.12 |
+| Target alone | 61.5 | 1.00× | $8.09 |
+| Draft co-located on the A100 (k=2) | 81.2 | 1.32× | **$6.13** |
+| **Split + overlap: RTX 4090 draft, same datacenter (k=2)** | **88.0** | **1.43×** | $8.46 |
+| Split: RTX 4090 draft, same datacenter (k=3) | 71.9 | 1.17× | $10.35 |
 | Split: L4 draft, same datacenter (k=1) | 51.4 | 0.84× | $12.85 |
 | Split: 4090 draft in EUR-IS-2, 68 ms network/round (k=8) | 25.5 | 0.42× | $29.19 |
 | Split: 4090 draft in US-IL-1, 143 ms network/round (k=5) | 15.3 | 0.25× | $48.76 |
 
-- **Break-even network delay:** about 3 ms added per call (two calls per round). Inside
-  one datacenter the network costs about 2.5 ms per round, so there is room; the other
-  regions tested cost 68 and 143 ms per round.
+- **Break-even network delay:** about 3 ms added per call (two calls per round), or
+  about 5 ms with overlap. Inside one datacenter the network costs about 2.5 ms per
+  round, so there is room; the other regions tested cost 68 and 143 ms per round.
+- **Overlap wins on speed, not on cost.** It cuts split's extra cost per token over
+  co-located from 69% to 38% ($8.46 vs $6.13), but the second GPU still adds 50% to
+  the hourly price.
 - **Draft speed decides split mode.** The L4 drafts 2.7× slower than the 4090 (12.3 vs
   4.6 ms per token), and the A100 sits idle waiting for it.
 - **Memory freed is small at this size:** moving a 1B draft off the A100 frees 2.6 GB
   of 80. That only matters if it lets the target serve more requests at once (see
   [Next](#next-many-users-at-once)).
 - **Exactness:** greedy output matches the target alone token for token (tested in
-  fp32 in eager mode, fast mode and over gRPC); sampled output is distributed exactly
+  fp32 in eager mode, fast mode, with overlap and over gRPC); sampled output is distributed exactly
   as the target's (rejection sampling, with a statistical test).
 
 All numbers: bf16, 4 prompts × 128 tokens, median of 3 runs after a warmup, RunPod
-EUR-IS-1, October 2026. Raw results are in [`results/`](results).
+EUR-IS-1, October 2026. The first four rows come from one session with both pods up
+at once; the rest are from earlier sessions on the same hardware (61.4 tok/s alone).
+Raw results are in [`results/`](results).
 
 ## How one round works
 
@@ -61,6 +69,14 @@ The target checks all k guesses in **one** forward pass, so each round yields be
 1 and k+1 tokens for one target call. Each request carries `keep_len` (how much of
 the worker's KV cache is still valid) and the tokens it hasn't seen yet, so a worker
 never has to guess what the orchestrator kept.
+
+**Overlap** (`--overlap`) keeps the draft GPU busy while the target verifies. The
+draft bets that all k guesses will be accepted and that the target's own next token
+will be the one the draft would pick. On that bet, it drafts the next round in the
+background. If the bet wins, the next round starts with its draft already done. If it
+loses, the early draft is thrown away and the round is drafted as usual, so the output
+never changes. The bet can only win when every guess is accepted; it won in 53% of
+rounds at k=1, 38% at k=2 and 29% at k=3.
 
 ## Results
 
@@ -93,18 +109,28 @@ because both were dominated by Python and kernel-launch overhead, not by the mod
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/a100-k-dark.svg">
-  <img alt="On an A100 target, co-located peaks at 1.25x and split with a 4090 draft at 1.20x; split with an L4 draft is below 1.0 at every k." src="docs/figures/a100-k-light.svg">
+  <img alt="On an A100 target, co-located peaks at 1.32x at k=2 and split with a 4090 draft at 1.17x; with overlap, split reaches 1.43x at k=2. Split with an L4 draft is below 1.0 at every k." src="docs/figures/a100-k-light.svg">
 </picture>
+
+With an L4 draft, split is slower than the target alone at every k: the L4 drafts
+2.7× slower than the 4090, and the A100 waits on it. With the 4090, plain split comes
+close to co-located, and overlap puts it ahead at k = 2 and 3. Overlap is best at
+small k. At k=5 the bet rarely wins (15% of rounds), and the 6-token early draft takes
+longer than the target's check, so every lost bet makes the next round wait for a
+draft that gets thrown away.
 
 ### Where splitting stops paying off
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/figures/delay-dark.svg">
-  <img alt="Speedup falls as injected delay per network call grows; it crosses 1.0 at about 3 ms on the cloud setup and 4 ms locally." src="docs/figures/delay-light.svg">
+  <img alt="Speedup falls as injected delay per network call grows; it crosses 1.0 at about 3 ms on the cloud setup, 4 ms locally, and 5 ms with overlap." src="docs/figures/delay-light.svg">
 </picture>
 
 Delay is injected per gRPC call, on top of the real network. Every round makes two
-calls (propose, then verify), so 3 ms per call adds about 6 ms per round.
+calls (propose, then verify), so 3 ms per call adds about 6 ms per round. Overlap
+hides the draft's share of that delay in the rounds where its bet wins, which moves
+the break-even from about 3 ms to about 5 ms. By 10 ms it no longer helps, since most
+rounds still pay the full delay.
 
 ### Real distance
 
@@ -141,14 +167,15 @@ of the users while the 4090 drafts for the other. Even so, co-located stays chea
 per token at every batch size, since the second GPU adds 50% to the hourly cost. The
 model assumes every user accepts the same number of tokens each round. For a single
 user it predicted co-located about 8% higher than measured, so treat these as upper
-bounds. Batched decoding is being built next to measure it for real.
+bounds. The prediction doesn't include overlap. Batched decoding is being built next
+to measure it for real.
 
 ## Compared with SpecSplit
 
 | | SpecSplit | specwire |
 |---|---|---|
 | Draft shape | token trees, tree-attention verify | chains |
-| Overlap draft and verify | yes | no |
+| Overlap draft and verify | yes | yes, measured: 1.17× → 1.43× |
 | Target-only and co-located baselines | none | both, equally optimized |
 | Throughput measured | ~1–2 tok/s (ngrok) | up to 106 tok/s |
 | Static KV cache with O(1) rollback | target only | both workers |
@@ -163,7 +190,7 @@ installs CUDA 13 PyTorch.
 
 ```sh
 uv sync
-uv run pytest                     # 88 tests; CUDA ones are skipped without a GPU
+uv run pytest                     # 101 tests; CUDA ones are skipped without a GPU
 ```
 
 Benchmark on one machine (split mode starts both gRPC servers as local subprocesses):
@@ -179,7 +206,7 @@ Run the servers yourself and watch rounds as they happen:
 ```sh
 uv run python -m specwire.rpc draft  --device cuda --dtype bfloat16 --fast
 uv run python -m specwire.rpc target --device cuda --dtype bfloat16 --fast
-uv run python -m specwire.run "Once upon a time," --k 3 --show-steps
+uv run python -m specwire.run "Once upon a time," --k 3 --show-steps --overlap
 ```
 
 Two-machine runs on RunPod (needs `RUNPOD_API_KEY` and a RunPod secret holding a
@@ -188,7 +215,7 @@ Hugging Face token; pods terminate themselves after `--ttl-min`):
 ```sh
 uv run python -m specwire.cloud up --draft-gpu "NVIDIA GeForce RTX 4090"
 uv run python -m specwire.cloud bench target -- --modes target colocated --k 1 3 5 8
-uv run python -m specwire.cloud bench draft -- --modes split --k 1 3 5 8
+uv run python -m specwire.cloud bench draft -- --modes split --k 1 2 3 5 --overlap both
 uv run python -m specwire.cloud down
 ```
 
@@ -213,6 +240,8 @@ Redraw the charts from `results/` with `uv run python scripts/plots.py`.
 
 - **One request at a time.** The batched numbers above are predicted from step
   timings, not measured end to end yet.
+- **Overlap needs separate GPUs.** On one GPU the early draft competes with the
+  target's check, so the bench only offers it in split mode.
 - **Small benchmark set:** 4 prompts, 128 tokens each, greedy. Acceptance rates depend
   on the text.
 - **bf16 near-ties.** In bf16, speculative and target-only output occasionally pick

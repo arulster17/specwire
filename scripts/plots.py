@@ -38,16 +38,16 @@ def load(name):
     return json.loads((RESULTS / f"{name}.json").read_text())["results"]
 
 
-def tok_s(results, mode, k=None, rtt_ms=0.0):
+def tok_s(results, mode, k=None, rtt_ms=0.0, overlap=False):
     for r in results:
         c = r["config"]
-        if c["mode"] == mode and c["k"] == k and c["rtt_ms"] == rtt_ms:
+        if (c["mode"], c["k"], c["rtt_ms"], c.get("overlap", False)) == (mode, k, rtt_ms, overlap):
             return r["summary"]["tok_s_median"]
-    raise KeyError((mode, k, rtt_ms))
+    raise KeyError((mode, k, rtt_ms, overlap))
 
 
-def speedups(results, base, mode, ks, rtt_ms=0.0):
-    return [tok_s(results, mode, k, rtt_ms) / base for k in ks]
+def speedups(results, base, mode, ks, rtt_ms=0.0, overlap=False):
+    return [tok_s(results, mode, k, rtt_ms, overlap) / base for k in ks]
 
 
 def styled_axes(theme, title, xlabel, ylabel):
@@ -115,31 +115,49 @@ def fast_mode(theme):
     return fig
 
 
+def by_k(sessions, mode, overlap=False):
+    """{k: speedup} over several sessions, each against its own target-only speed;
+    later sessions win where they measured the same k."""
+    out = {}
+    for results, base in sessions:
+        for r in results:
+            c = r["config"]
+            if c["mode"] == mode and c["rtt_ms"] == 0 and c.get("overlap", False) == overlap:
+                out[c["k"]] = r["summary"]["tok_s_median"] / base
+    return sorted(out), [out[k] for k in sorted(out)]
+
+
 def a100_k(theme):
     """Cloud: A100 target, draft co-located or on its own GPU in the same datacenter."""
-    ks = [1, 3, 5, 8]
-    base_results = load("p3-a100-baselines")
-    base = tok_s(base_results, "target")
+    p3 = load("p3-a100-baselines")
+    base = tok_s(p3, "target")
     l4 = load("p3-split-l4")
     # k=5 hit a network spike in the sweep (37 ms/round instead of ~2.7); use the rerun.
     l4 = [r for r in l4 if r["config"]["k"] != 5] + load("p3-split-l4-k5-rerun")
+    # The overlap session reran co-located and split at k = 1-3 (and 5), adding k=2.
+    p4_base = tok_s(load("p4-overlap-baseline"), "target")
+    p4 = load("p4-overlap-baseline") + load("p4-overlap-split")
     fig, ax = styled_axes(
         theme,
-        "Split mode needs a fast draft GPU",
+        "Drafting ahead lets split beat co-located",
         "draft length k",
         "speedup over target alone",
     )
     blue, orange, aqua = theme["series"]
     series = [
-        (speedups(base_results, base, "colocated", ks), blue, "co-located on the A100"),
-        (speedups(load("p3-split-4090"), base, "split", ks), orange, "split, RTX 4090 draft"),
-        (speedups(l4, base, "split", ks), aqua, "split, L4 draft"),
+        (by_k([(p3, base), (p4, p4_base)], "colocated"), blue, "co-located on the A100", False),
+        (by_k([(p4, p4_base)], "split", overlap=True), orange, "split + overlap, RTX 4090 draft", False),
+        (by_k([(load("p3-split-4090"), base), (p4, p4_base)], "split"), orange,
+         "split, RTX 4090 draft", True),
+        (by_k([(l4, base)], "split"), aqua, "split, L4 draft", False),
     ]
-    for y, color, label in series:
-        line(ax, ks, y, color, label)
+    for (x, y), color, label, dashed in series:
+        line(ax, x, y, color, label, dashed)
     baseline(ax, theme)
-    ax.set_xticks(ks)
-    ax.set_ylim(0.3, 1.4)
+    ax.annotate("1.43×", (2, tok_s(p4, "split", 2, overlap=True) / p4_base), xytext=(0, 8),
+                textcoords="offset points", ha="center", fontsize=9, color=theme["text"])
+    ax.set_xticks([1, 2, 3, 5, 8])
+    ax.set_ylim(0.3, 1.55)
     legend(ax, theme, loc="lower left")
     ax.set_title(f"Llama 3.2 1B → 3.1 8B, A100 target ({base:.0f} tok/s alone), same datacenter.",
                  loc="left", fontsize=9, color=theme["muted"])
@@ -159,17 +177,23 @@ def delay(theme):
     local = load("bench-3b-fast-rtt")
     local_base = tok_s(local, "target")
     series = [
-        (local, local_base, blue, "local: 0.5B → 3B, one RTX 5070 Ti"),
-        (load("p3-split-4090-delay"), a100, orange, "cloud: 4090 draft → A100 target"),
-        (load("p3-split-l4-delay"), a100, aqua, "cloud: L4 draft → A100 target"),
+        (local, local_base, blue, "local: 0.5B → 3B, one RTX 5070 Ti", False),
+        (load("p3-split-4090-delay"), a100, orange, "cloud: 4090 draft → A100 target", True),
+        (load("p3-split-l4-delay"), a100, aqua, "cloud: L4 draft → A100 target", False),
     ]
-    for results, base, color, label in series:
+    for results, base, color, label, dashed in series:
         rtts = [r["config"]["rtt_ms"] for r in results if r["config"]["mode"] == "split"]
-        line(ax, rtts, [tok_s(results, "split", 3, d) / base for d in rtts], color, label)
+        line(ax, rtts, [tok_s(results, "split", 3, d) / base for d in rtts], color, label, dashed)
+    # Overlap: 0 ms comes from the k sweep, the rest from the delay sweep, same session.
+    p4_base = tok_s(load("p4-overlap-baseline"), "target")
+    p4 = load("p4-overlap-split") + load("p4-overlap-delay")
+    rtts = [0.0, 2.0, 5.0, 10.0]
+    line(ax, rtts, [tok_s(p4, "split", 3, d, overlap=True) / p4_base for d in rtts], orange,
+         "cloud: 4090 draft → A100, overlap")
     baseline(ax, theme)
     ax.set_xticks([0, 1, 2, 3, 4, 5, 10, 20])
     ax.set_xlim(-0.5, 20.5)
-    ax.set_ylim(0.3, 1.4)
+    ax.set_ylim(0.3, 1.45)
     legend(ax, theme, loc="upper right")
     ax.set_title("Draft length k = 3. A same-datacenter call already costs about 1 ms.",
                  loc="left", fontsize=9, color=theme["muted"])
@@ -180,18 +204,25 @@ def regions(theme):
     """Best k at each draft location, A100 target fixed in EUR-IS-1."""
     base_results = load("p3-a100-baselines")
     base = tok_s(base_results, "target")
-    rows = [("co-located on the A100", base_results, "colocated", "no network")]
-    for name, where in [("p3-split-4090", "4090, same datacenter"),
-                        ("p3-split-4090-EUR-IS-2", "4090 in EUR-IS-2"),
+    # Same-datacenter rows come from the overlap session, which ran them side by side
+    # (each against that session's own target-only speed).
+    p4_base = tok_s(load("p4-overlap-baseline"), "target")
+    split = load("p4-overlap-split")
+    overlap = [r for r in split if r["config"].get("overlap")]
+    plain = [r for r in split if not r["config"].get("overlap")]
+    rows = [("co-located on the A100", load("p4-overlap-baseline"), "colocated", "no network", p4_base),
+            ("4090, same datacenter, overlap", overlap, "split", "overlap", p4_base),
+            ("4090, same datacenter", plain, "split", None, p4_base)]
+    for name, where in [("p3-split-4090-EUR-IS-2", "4090 in EUR-IS-2"),
                         ("p3-split-4090-US-IL-1", "4090 in US-IL-1")]:
-        rows.append((where, load(name), "split", None))
+        rows.append((where, load(name), "split", None, base))
     labels, values, notes = [], [], []
-    for label, results, mode, note in rows:
+    for label, results, mode, note, row_base in rows:
         best = max((r for r in results if r["config"]["mode"] == mode), key=lambda r: r["summary"]["tok_s_median"])
         s = best["summary"]
         net = s.get("network_ms_per_round")
         labels.append(label)
-        values.append(s["tok_s_median"] / base)
+        values.append(s["tok_s_median"] / row_base)
         notes.append(f"k={best['config']['k']} · {note or f'{net:.{1 if net < 10 else 0}f} ms/round'}"
                      f" · ${s['usd_per_1m_tokens']:.2f}/1M tok")
     fig, ax = styled_axes(
@@ -200,6 +231,7 @@ def regions(theme):
         "speedup over target alone (best k)",
         "",
     )
+    fig.set_size_inches(8.4, 4.0)
     ax.grid(axis="y", visible=False)
     ax.grid(axis="x", color=theme["grid"], linewidth=0.8)
     ax.spines["bottom"].set_visible(False)

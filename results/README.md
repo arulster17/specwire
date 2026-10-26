@@ -27,6 +27,9 @@ greedy, 4 prompts × 128 tokens, 3 timed runs after 1 warmup, unless noted.
 | `p3-split-l4-delay.json` | L4 | split at k=3 with 0–20 ms injected per call |
 | `p3-split-4090-EUR-IS-2.json` | RTX 4090 in EUR-IS-2 | split from another datacenter (68 ms network per round) |
 | `p3-split-4090-US-IL-1.json` | RTX 4090 in US-IL-1 | split across the Atlantic (143 ms network per round) |
+| `p4-overlap-baseline.json` | (A100) | target-only and co-located at k = 1/2/3, same session as the two below |
+| `p4-overlap-split.json` | RTX 4090 | split at k = 1/2/3/5, with and without overlap |
+| `p4-overlap-delay.json` | RTX 4090 | split at k=3 with 2/5/10 ms injected per call, with and without overlap |
 
 In `p3-split-4090-EUR-IS-2.json`, the 4090 itself ran slowly during k=1 and k=3
 (29–62 ms per draft token instead of about 4.6) and partly during k=5 (10.5 ms), so

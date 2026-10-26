@@ -54,7 +54,7 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 ### Phase 4 — Improvements (pick 1–2)
 - [ ] Tree drafting
 - [ ] Adaptive draft length
-- [ ] Overlap: draft next round while target verifies
+- [x] Overlap: draft next round while target verifies
 - [ ] Multi-user batching (where freed target memory should pay off)
 
 ### Phase 5 — Write-up
