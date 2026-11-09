@@ -1,4 +1,4 @@
-# specwire — Plan
+# SpecWire — Plan
 
 Disaggregated speculative decoding: run the small draft model and the large
 target model on separate machines, connected over the network, and measure
@@ -75,7 +75,7 @@ region / datacenter. Stretch: 70B (4-bit) on A100 80GB.
 
 | Decision          | Choice                                    |
 | ----------------- | ----------------------------------------- |
-| Name              | specwire                                  |
+| Name              | SpecWire                                  |
 | Repo              | private on GitHub, public after Phase 1   |
 | Compute           | Mac for dev, cloud GPUs for benchmarks    |
 | Cloud provider    | RunPod                                    |

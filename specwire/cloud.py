@@ -1,4 +1,4 @@
-"""Run specwire on RunPod: a target pod and a draft pod, driven over SSH.
+"""Run SpecWire on RunPod: a target pod and a draft pod, driven over SSH.
 
     uv run python -m specwire.cloud up                       # create both pods, start target server
     uv run python -m specwire.cloud rtt                      # gRPC round trip, draft pod -> target

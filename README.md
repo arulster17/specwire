@@ -1,15 +1,15 @@
-# specwire
+# SpecWire
 
 [![tests](https://github.com/arulster17/specwire/actions/workflows/ci.yml/badge.svg)](https://github.com/arulster17/specwire/actions/workflows/ci.yml)
 
 Speculative decoding with the draft model and the target model on **separate
 machines**, talking over gRPC, and a benchmark of when that actually pays off.
 
-> **Built off [SpecSplit](https://github.com/SamvritS/SpecSplit).** specwire is my
+> **Built off [SpecSplit](https://github.com/SamvritS/SpecSplit).** SpecWire is my
 > rebuild and continuation of SpecSplit, a group project I was part of. SpecSplit
 > built the disaggregated design but couldn't measure it: its benchmarks ran through
 > ngrok tunnels at 1–2 tokens/s, with about 99.9% of the time spent waiting on the
-> network, and it had no target-only baseline to compare against. specwire rebuilds
+> network, and it had no target-only baseline to compare against. SpecWire rebuilds
 > the core from scratch and answers the question. Credit for the original idea and
 > design goes to the SpecSplit authors.
 
@@ -172,7 +172,7 @@ to measure it for real.
 
 ## Compared with SpecSplit
 
-| | SpecSplit | specwire |
+| | SpecSplit | SpecWire |
 |---|---|---|
 | Draft shape | token trees, tree-attention verify | chains |
 | Overlap draft and verify | yes | yes, measured: 1.17× → 1.43× |
